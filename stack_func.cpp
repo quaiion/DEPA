@@ -1,7 +1,7 @@
 #include "stack.hpp"
                
-static unsigned char *stack_resize_up (stack_t *stack);
-static unsigned char *stack_resize_down (stack_t *stack);
+static void stack_resize_up (stack_t *stack);
+static void stack_resize_down (stack_t *stack);
 
 void stack_ctor (stack_t *stack, ssize_t min_capacity /* = 1 */) {
 
@@ -16,7 +16,7 @@ void stack_dtor (stack_t *stack) {
     memset (stack->data, BROKEN_BYTE, stack->capacity * sizeof (int));
     free (stack->data);
 
-    stack->data = OS_RESERVED_ADDRESS;
+    stack->data = (int *) OS_RESERVED_ADDRESS;
     stack->size = SIZE_MAX;
     stack->capacity = SIZE_MAX;
     stack->min_capacity = SIZE_MAX;
@@ -36,19 +36,19 @@ int stack_pop (stack_t *stack) {
         return 0;
     }
 
-    int value = stack->data [stack->size --];
+    int value = stack->data [-- stack->size];
 
     if (stack->size == stack->capacity / 4 && stack->size >= stack->min_capacity) stack_resize_down (stack);
 
     return value;
 }
 
-unsigned char *stack_resize_up (stack_t *stack) {
+void stack_resize_up (stack_t *stack) {
 
     stack->data = (int *) realloc (stack->data, (stack->capacity = stack->capacity * 2) * sizeof (int));
 }
 
-unsigned char *stack_resize_down (stack_t *stack) {
+void stack_resize_down (stack_t *stack) {
 
     stack->data = (int *) realloc (stack->data, (stack->capacity = stack->capacity / 2) * sizeof (int));
 }
@@ -57,23 +57,23 @@ void stack_dump (stack_t *stack, int code_line_num) {
 
     FILE *log_file = fopen ("LOG.txt", "a");
 
-    fprintf (log_file, "Stack DUMP called by DUMP command (code line %d)", code_line_num);
+    fprintf (log_file, "Stack dump called by DUMP command (code line %d)", code_line_num);
 
     if (stack) {
 
-        fprintf (log_file, "\n\nStack address: [%p]\n\nStack parameters:\nsize %10.lld\ncapacity %10.lld\nmincapacity %10.lld\n\nData: [%p]",
-                stack, stack -> size, stack -> capacity, stack -> mincapacity, stack -> data);
+        fprintf (log_file, "\n\nStack address: [%p]\n\nStack parameters:\nsize %lld\ncapacity %lld\nmin_capacity %lld\n\nData: [%p]",
+                stack, stack -> size, stack -> capacity, stack -> min_capacity, stack -> data);
 
         ssize_t stack_cells_dumped = 0;
         for ( ; stack_cells_dumped < stack->size; stack_cells_dumped ++) {
 
-            fprintf (logfile, "\n[%lld]   %10.ld", stack_cells_dumped, stack->data [stack_cells_dumped]);
+            fprintf (log_file, "\n[%lld]   %10.d", stack_cells_dumped, stack->data [stack_cells_dumped]);
         }
         fputs (" ____ SIZE EDGE", log_file);
 
         for ( ; stack_cells_dumped < stack->capacity; stack_cells_dumped ++) {
 
-            fprintf (logfile, "\n[%lld]   %10.ld", stack_cells_dumped, stack->data [stack_cells_dumped]);
+            fprintf (log_file, "\n[%lld]   %10.d", stack_cells_dumped, stack->data [stack_cells_dumped]);
         }
 
     } else {
@@ -90,7 +90,7 @@ void stack_verif_dump (stack_t *stack, int code_line_num, unsigned char dump_cod
 
     FILE *log_file = fopen ("LOG.txt", "a");
 
-    fprintf (log_file, "Stack DUMP automatically called by the VERIFY command (code line %d)\n\nVerification codes returned:", code_line_num);
+    fprintf (log_file, "Stack dump automatically called by the VERIFY command (code line %d)\n\nVerification codes returned:", code_line_num);
     
     if (dump_code == NO_FLAWS) {
 
@@ -114,7 +114,7 @@ void stack_verif_dump (stack_t *stack, int code_line_num, unsigned char dump_cod
 
     if ((dump_code & UNDERFLOW) == UNDERFLOW) {
 
-        fputs ("\nCode -4: actual stack's CAPACITY value ran below MINCAPACITY value", log_file);
+        fputs ("\nCode -4: actual stack's CAPACITY value ran below min_capacity value", log_file);
     }
 
     if ((dump_code & CAP_ERR) == CAP_ERR) {
@@ -127,26 +127,26 @@ void stack_verif_dump (stack_t *stack, int code_line_num, unsigned char dump_cod
         fputs ("\nCode -6: actual stack's MIN_CAPACITY value is set below zero", log_file);
     }
 
-    if ((dump_code & SIZE_ERR == SIZE_ERR) {
+    if ((dump_code & SIZE_ERR) == SIZE_ERR) {
 
         fputs ("\nCode -7: actual stack's SIZE parameter ran below zero", log_file);
     }
 
     if (stack) {
 
-        fprintf (log_file, "\n\nStack address: [%p]\n\nStack parameters:\nsize %10.lld\ncapacity %10.lld\nmincapacity %10.lld\n\nData: [%p]",
-                stack, stack -> size, stack -> capacity, stack -> mincapacity, stack -> data);
+        fprintf (log_file, "\n\nStack address: [%p]\n\nStack parameters:\nsize %lld\ncapacity %lld\nmin_capacity %lld\n\nData: [%p]",
+                stack, stack -> size, stack -> capacity, stack -> min_capacity, stack -> data);
 
         ssize_t stack_cells_dumped = 0;
         for ( ; stack_cells_dumped < stack->size; stack_cells_dumped ++) {
 
-            fprintf (logfile, "\n[%lld]   %10.ld", stack_cells_dumped, stack->data [stack_cells_dumped]);
+            fprintf (log_file, "\n[%lld]   %10.d", stack_cells_dumped, stack->data [stack_cells_dumped]);
         }
         fputs (" ____ SIZE EDGE", log_file);
 
         for ( ; stack_cells_dumped < stack->capacity; stack_cells_dumped ++) {
 
-            fprintf (logfile, "\n[%lld]   %10.ld", stack_cells_dumped, stack->data [stack_cells_dumped]);
+            fprintf (log_file, "\n[%lld]   %10.d", stack_cells_dumped, stack->data [stack_cells_dumped]);
         }
 
     } else {
@@ -191,7 +191,7 @@ void stack_verify (stack_t *stack, int code_line_num) {
         verif_code |= CAP_ERR;
     }
 
-    if (stack->capacity < stack->mincapacity) {
+    if (stack->capacity < stack->min_capacity) {
 
         verif_code |= UNDERFLOW;
     }
