@@ -1,19 +1,12 @@
 #include "cpu.hpp"
 
-static size_t estimate_prog_size (unsigned char *code_buffer, size_t code_buffer_size);
 static size_t get_file_size (FILE *file);
-static int get_num_of_digits (int number);
+static int get_num_of_digits_int (int number);
+static int get_num_of_digits_sizet (size_t number);
 static int verify_code_architecture (unsigned char *code_buffer);
 static int verify_cmd_code (size_t byte_number, unsigned char cmd_code);
 
-FILE *open_prog_file (int argc, char *argv []) {
-
-    assert (argv);
-
-    return (argc == 2) ? (fopen ("QO_prog_file.asm", "w")) : (fopen (argv [2], "w"));
-}
-
-size_t get_file_size (FILE *file) {
+static size_t get_file_size (FILE *file) {
 
     assert (file);
 
@@ -24,7 +17,7 @@ size_t get_file_size (FILE *file) {
     return file_size;
 }
 
-int verify_code_architecture (unsigned char *code_buffer) {
+static int verify_code_architecture (unsigned char *code_buffer) {
 
     assert (code_buffer);
 
@@ -37,7 +30,7 @@ int verify_code_architecture (unsigned char *code_buffer) {
     return SUCCESS;
 }
 
-int verify_cmd_code (size_t byte_number, unsigned char cmd_code) {
+static int verify_cmd_code (size_t byte_number, unsigned char cmd_code) {
 
     if ((cmd_code & ONLY_CMD_TYPE_MASK) > NUM_OF_CMD_TYPES - 1) {
 
@@ -48,7 +41,7 @@ int verify_cmd_code (size_t byte_number, unsigned char cmd_code) {
     return SUCCESS;
 }
 
-int get_num_of_digits (int number) {
+static int get_num_of_digits_int (int number) {
 
     int num_of_digits = 0;
 
@@ -56,6 +49,20 @@ int get_num_of_digits (int number) {
 
         num_of_digits = 1;
     }
+
+    do {
+
+        number /= 10;
+        num_of_digits += 1;
+
+    } while (number != 0);
+
+    return num_of_digits;
+}
+
+static int get_num_of_digits_sizet (size_t number) {
+
+    int num_of_digits = 0;
 
     do {
 
@@ -107,14 +114,26 @@ size_t estimate_prog_size (unsigned char* code_buffer, size_t code_buffer_size) 
 
     for (size_t bytes_handled = 0; bytes_handled < code_buffer_size; bytes_handled ++) {
 
-        size_t bytes_diff = 0;
         max_cmds_size += MAX_CMD_NAME_BYTE_SIZE + 3 * sizeof (char);
 
-        if (code_buffer [bytes_handled] == STVRF || code_buffer [bytes_handled] == STDMP) {
+        if (code_buffer [bytes_handled] == STVRF || code_buffer [bytes_handled] == STDMP || code_buffer [bytes_handled] == RGDMP ||     \
+            code_buffer [bytes_handled] == ASTVRF || code_buffer [bytes_handled] == ASTDMP) {
 
             bytes_handled += sizeof (int);
             continue;
         }
+
+        if (code_buffer [bytes_handled] == JMP || code_buffer [bytes_handled] == JA || code_buffer [bytes_handled] == JAE ||   \
+            code_buffer [bytes_handled] == JB || code_buffer [bytes_handled] == JBE || code_buffer [bytes_handled] == JE ||    \
+            code_buffer [bytes_handled] == JNE || code_buffer [bytes_handled] == JF || code_buffer [bytes_handled] == CALL) {
+
+            max_cmds_size += sizeof (char) * get_num_of_digits_sizet (*((size_t *) (code_buffer + bytes_handled + sizeof (unsigned char))));
+
+            bytes_handled += sizeof (size_t);
+            continue;
+        }
+
+        size_t bytes_diff = 0;
 
         if (code_buffer [bytes_handled] & RAM_BIT_MASK) {
 
@@ -129,7 +148,7 @@ size_t estimate_prog_size (unsigned char* code_buffer, size_t code_buffer_size) 
 
         if (code_buffer [bytes_handled] & IMM_BIT_MASK) {
 
-            max_cmds_size += sizeof (char) * get_num_of_digits (*((int *) (code_buffer + bytes_handled + sizeof (unsigned char) + bytes_diff)));
+            max_cmds_size += sizeof (char) * get_num_of_digits_int (*((int *) (code_buffer + bytes_handled + sizeof (unsigned char) + bytes_diff)));
             bytes_diff += sizeof (int);
         }
 
@@ -139,10 +158,12 @@ size_t estimate_prog_size (unsigned char* code_buffer, size_t code_buffer_size) 
     return max_cmds_size;
 }
 
-int disassemble_code (unsigned char* code_buffer, size_t code_buffer_size, FILE *prog_file) {
+int disassemble_code (unsigned char* code_buffer, size_t code_buffer_size, char *prog_buffer, size_t *disassembled_cmds_size) {
 
     assert (code_buffer);
-    assert (prog_file);
+    assert (code_buffer_size >= 0);
+    assert (prog_buffer);
+    assert (disassembled_cmds_size);
 
     if (verify_code_architecture (code_buffer - sizeof (code_info_t))) {
 
@@ -158,84 +179,109 @@ int disassemble_code (unsigned char* code_buffer, size_t code_buffer_size, FILE 
     printf ("\n");
     */
 
-    size_t max_prog_size = estimate_prog_size (code_buffer, code_buffer_size);
-    char *prog_buffer = (char *) calloc (max_prog_size, sizeof (char));
-    if (prog_buffer == NULL) {
-
-        printf ("DISASSEMBLING FAULT: MEMERY ERROR");
-        exit (EXIT_FAILURE);
-    }
-
-    size_t disassembled_cmds_size = 0;
+    size_t handled_cmds_size = 0;
     for (size_t bytes_handled = 0; bytes_handled < code_buffer_size; bytes_handled ++) {
-
-        int arg = 0;
-        size_t bytes_diff = 0;
 
         if (verify_cmd_code (bytes_handled + sizeof (code_info_t), code_buffer [bytes_handled])) {
 
-            free (prog_buffer);
             return ERROR;
         }
-        sprintf (prog_buffer + disassembled_cmds_size, "%s", CMD_NAMES [code_buffer [bytes_handled] & ONLY_CMD_TYPE_MASK]);
-        disassembled_cmds_size += strlen (CMD_NAMES [code_buffer [bytes_handled] & ONLY_CMD_TYPE_MASK]) * sizeof (char);
 
-        if (code_buffer [bytes_handled] == STVRF || code_buffer [bytes_handled] == STDMP) {
+        sprintf (prog_buffer + handled_cmds_size, "%s", CMD_NAMES [code_buffer [bytes_handled] & ONLY_CMD_TYPE_MASK]);
+        handled_cmds_size += strlen (CMD_NAMES [code_buffer [bytes_handled] & ONLY_CMD_TYPE_MASK]) * sizeof (char);
 
-            *(prog_buffer + disassembled_cmds_size) = '\n';
+        if (code_buffer [bytes_handled] == STVRF || code_buffer [bytes_handled] == STDMP || code_buffer [bytes_handled] == RGDMP ||     \
+            code_buffer [bytes_handled] == ASTVRF || code_buffer [bytes_handled] == ASTDMP) {
 
-            disassembled_cmds_size += (sizeof (char));
+            *(prog_buffer + handled_cmds_size) = '\n';
+
+            handled_cmds_size += (sizeof (char));
             bytes_handled += sizeof (int);
             continue;
         }
 
+        if (code_buffer [bytes_handled] == JMP || code_buffer [bytes_handled] == JA || code_buffer [bytes_handled] == JAE ||   \
+            code_buffer [bytes_handled] == JB || code_buffer [bytes_handled] == JBE || code_buffer [bytes_handled] == JE ||    \
+            code_buffer [bytes_handled] == JNE || code_buffer [bytes_handled] == JF || code_buffer [bytes_handled] == CALL) {
+
+            int arg = 0;
+            arg = *((size_t *) (code_buffer + bytes_handled + sizeof (unsigned char)));
+            sprintf (prog_buffer + handled_cmds_size, " %d", arg);
+            handled_cmds_size += sizeof (char) * get_num_of_digits_int (arg) + sizeof (char);
+            *(prog_buffer + handled_cmds_size) = '\n';
+            handled_cmds_size += sizeof (char);
+
+            bytes_handled += sizeof (size_t);
+            continue;
+        }
+
+        size_t bytes_diff = 0;
+
         if ((code_buffer [bytes_handled] & REG_BIT_MASK) || (code_buffer [bytes_handled] & IMM_BIT_MASK) || (code_buffer [bytes_handled] & RAM_BIT_MASK)) {
 
-            *(prog_buffer + disassembled_cmds_size) = ' ';
-            disassembled_cmds_size += sizeof (char);
+            *(prog_buffer + handled_cmds_size) = ' ';
+            handled_cmds_size += sizeof (char);
         }
 
         if (code_buffer [bytes_handled] & RAM_BIT_MASK) {
 
-            *(prog_buffer + disassembled_cmds_size) = '[';
-            disassembled_cmds_size += sizeof (char);
+            *(prog_buffer + handled_cmds_size) = '[';
+            handled_cmds_size += sizeof (char);
         }
 
         if (code_buffer [bytes_handled] & REG_BIT_MASK) {
 
-            sprintf (prog_buffer + disassembled_cmds_size, "%cx", 'a' + *(code_buffer + bytes_handled + sizeof (unsigned char)));
-            disassembled_cmds_size += 2 * sizeof (char);
+            sprintf (prog_buffer + handled_cmds_size, "%cx", 'a' + *(code_buffer + bytes_handled + sizeof (unsigned char)));
+            handled_cmds_size += 2 * sizeof (char);
             bytes_diff += sizeof (unsigned char);
 
             if (code_buffer [bytes_handled] & IMM_BIT_MASK) {
 
-                *(prog_buffer + disassembled_cmds_size) = '+';
-                disassembled_cmds_size += sizeof (char);
+                *(prog_buffer + handled_cmds_size) = '+';
+                handled_cmds_size += sizeof (char);
             }
         }
 
         if (code_buffer [bytes_handled] & IMM_BIT_MASK) {
 
+            int arg = 0;
             arg = *((int *) (code_buffer + bytes_handled + sizeof (unsigned char) + bytes_diff));
-            sprintf (prog_buffer + disassembled_cmds_size, "%d", arg);
-            disassembled_cmds_size += sizeof (char) * get_num_of_digits (arg);
+            sprintf (prog_buffer + handled_cmds_size, "%d", arg);
+            handled_cmds_size += sizeof (char) * get_num_of_digits_int (arg);
             bytes_diff += sizeof (int);
         }
 
         if (code_buffer [bytes_handled] & RAM_BIT_MASK) {
 
-            *(prog_buffer + disassembled_cmds_size) = ']';
-            disassembled_cmds_size += sizeof (char);
+            *(prog_buffer + handled_cmds_size) = ']';
+            handled_cmds_size += sizeof (char);
         }
 
-        *(prog_buffer + disassembled_cmds_size) = '\n';
-        disassembled_cmds_size += sizeof (char);
+        *(prog_buffer + handled_cmds_size) = '\n';
+        handled_cmds_size += sizeof (char);
 
         bytes_handled += bytes_diff;
     }
 
-    fwrite (prog_buffer, sizeof (char), disassembled_cmds_size, prog_file);
-    free (prog_buffer);
+    *disassembled_cmds_size = handled_cmds_size;
 
     return SUCCESS;
+}
+
+void upload_prog (char *prog_buffer, FILE *prog_file, size_t disassembled_cmds_size) {
+
+    assert (prog_buffer);
+    assert (prog_file);
+    assert (disassembled_cmds_size >= 0);
+
+    fwrite (prog_buffer, sizeof (char), disassembled_cmds_size, prog_file);
+}
+
+void clean_disasm_memory (unsigned char *code_buffer, char *prog_buffer) {
+
+    assert (code_buffer);
+    assert (prog_buffer);
+
+    free (code_buffer - sizeof (code_info_t));
+    free (prog_buffer);
 }

@@ -11,18 +11,17 @@ int main (int argc, char *argv []) {
     cpu_ctor (&cpu);
 
     FILE *code_file = fopen (argv [1], "rb");
-
     load_code (code_file, &cpu);
+    fclose (code_file);
 
     execute_code (&cpu);
 
-    fclose (code_file);
     cpu_dtor (&cpu);
     
     return 0;
 }
 
-void verify_launch_parameters (int argc) {
+static void verify_launch_parameters (int argc) {
 
     if (argc != 2) {
 

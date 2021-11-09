@@ -1,9 +1,10 @@
 #include "cpu.hpp"
 #include "stack_func.cpp"
 
-static size_t get_in_file_size (FILE *file);
+static size_t get_file_size (FILE *file);
 static int verify_code_architecture (unsigned char *code_buffer);
 static void clean_buffer_memory (unsigned char *code_buffer);
+static void reg_dump (cpu_t *cpu, int line);
 
 void cpu_ctor (cpu_t *cpu) {
 
@@ -28,6 +29,7 @@ void cpu_ctor (cpu_t *cpu) {
     }
 
     stack_ctor (&(cpu->stack));
+    addr_stack_ctor (&(cpu->addr_stack));
 }
 
 void cpu_dtor (cpu_t *cpu) {
@@ -50,9 +52,10 @@ void cpu_dtor (cpu_t *cpu) {
     }
 
     stack_dtor (&(cpu->stack));
+    addr_stack_dtor (&(cpu->addr_stack));
 }
 
-size_t get_file_size (FILE *file) {
+static size_t get_file_size (FILE *file) {
 
     assert (file);
 
@@ -63,7 +66,7 @@ size_t get_file_size (FILE *file) {
     return file_size;
 }
 
-int verify_code_architecture (unsigned char *code_buffer) {
+static int verify_code_architecture (unsigned char *code_buffer) {
 
     assert (code_buffer);
 
@@ -71,7 +74,7 @@ int verify_code_architecture (unsigned char *code_buffer) {
 
         if ((*((code_info_t *) code_buffer)).arch == 'NOPE') {
 
-            printf ("\nDISASSEMBLING FAULT: CPU EMULATION IS DISTRUCTED\n");
+            printf ("\nEXECUTION FAULT: CPU EMULATION IS DISTRUCTED\n");
             return ERROR;
         }
 
@@ -113,6 +116,7 @@ int execute_code (cpu_t *cpu) {
     }
 
     stack_t *stack_p = &(cpu->stack);
+    addr_stack_t *addr_stack_p = &(cpu->addr_stack);
     for (cpu->ip = 0; cpu->ip < cpu->code_size; cpu->ip += sizeof (unsigned char)) {
 
         switch (cpu->code [cpu->ip] & ONLY_CMD_TYPE_MASK) {
@@ -246,20 +250,158 @@ int execute_code (cpu_t *cpu) {
 
             case STVRF: {
 
-                stack_verify (stack_p, *((int *) (cpu->code + cpu->ip + 1)));
+                stack_verify (stack_p, *((int *) (cpu->code + cpu->ip + sizeof (unsigned char))));
                 cpu->ip += sizeof (int);
                 break;
             }
 
             case STDMP: {
 
-                stack_dump (stack_p, *((int *) (cpu->code + cpu->ip + 1)));
+                stack_dump (stack_p, *((int *) (cpu->code + cpu->ip + sizeof (unsigned char))));
+                cpu->ip += sizeof (int);
+                break;
+            }
+
+            case RGDMP: {
+
+                reg_dump (cpu, *((int *) (cpu->code + cpu->ip + sizeof (unsigned char))));
+                cpu->ip += sizeof (int);
+                break;
+            }
+
+            case JMP: {
+
+                cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+                break;
+            }
+
+            case JA: {
+
+                int temp_val2 = stack_pop (stack_p), temp_val1 = stack_pop (stack_p);
+                stack_push (stack_p, temp_val1);
+                stack_push (stack_p, temp_val2);
+
+                if (temp_val1 > temp_val2) {
+
+                    cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+                }
+
+                break;
+            }
+
+            case JAE: {
+
+                int temp_val2 = stack_pop (stack_p), temp_val1 = stack_pop (stack_p);
+                stack_push (stack_p, temp_val1);
+                stack_push (stack_p, temp_val2);
+
+                if (temp_val1 >= temp_val2) {
+
+                    cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+                }
+
+                break;
+            }
+
+            case JB: {
+
+                int temp_val2 = stack_pop (stack_p), temp_val1 = stack_pop (stack_p);
+                stack_push (stack_p, temp_val1);
+                stack_push (stack_p, temp_val2);
+
+                if (temp_val1 < temp_val2) {
+
+                    cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+                }
+
+                break;
+            }
+
+            case JBE: {
+
+                int temp_val2 = stack_pop (stack_p), temp_val1 = stack_pop (stack_p);
+                stack_push (stack_p, temp_val1);
+                stack_push (stack_p, temp_val2);
+
+                if (temp_val1 <= temp_val2) {
+
+                    cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+                }
+
+                break;
+            }
+
+            case JE: {
+
+                int temp_val2 = stack_pop (stack_p), temp_val1 = stack_pop (stack_p);
+                stack_push (stack_p, temp_val1);
+                stack_push (stack_p, temp_val2);
+
+                if (temp_val1 == temp_val2) {
+
+                    cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+                }
+
+                break;
+            }
+
+            case JNE: {
+
+                int temp_val2 = stack_pop (stack_p), temp_val1 = stack_pop (stack_p);
+                stack_push (stack_p, temp_val1);
+                stack_push (stack_p, temp_val2);
+
+                if (temp_val1 != temp_val2) {
+
+                    cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+                }
+
+                break;
+            }
+
+            case JF: {
+
+                time_t tim = time (NULL);
+                if (localtime (&tim)->tm_wday == FRIDAY) {
+
+                    cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+                }
+
+                break;
+            }
+
+            case CALL: {
+
+                addr_stack_push (addr_stack_p, cpu->ip + sizeof (unsigned char));
+                cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+
+                break;
+            }
+
+            case RET: {
+
+                cpu->ip = addr_stack_pop (addr_stack_p) - sizeof (unsigned char);
+                break;
+            }
+
+            case ASTDMP: {
+
+                addr_stack_dump (addr_stack_p, *((int *) (cpu->code + cpu->ip + sizeof (unsigned char))));
+                cpu->ip += sizeof (int);
+                break;
+            }
+
+            case ASTVRF: {
+
+                addr_stack_verify (addr_stack_p, *((int *) (cpu->code + cpu->ip + sizeof (unsigned char))));
                 cpu->ip += sizeof (int);
                 break;
             }
 
             default: {
+                
                 printf ("\nEXECUTION FAULT: WRONG COMMAND\n");
+                stack_dtor (stack_p);
                 return ERROR;
             }
         }
@@ -271,7 +413,23 @@ int execute_code (cpu_t *cpu) {
     return SUCCESS;
 }
 
-void clean_buffer_memory (unsigned char *code_buffer) {
+static void reg_dump (cpu_t *cpu, int line) {
+
+    FILE *log_file = fopen ("LOG.txt", "a");
+
+    fprintf (log_file, "Register dump called by DUMP command (code line %d)\n\nRegisters address: [%p]\n\nValues stored:  ", line, &(cpu->reg));
+
+    for (int i = 0; i < NUM_OF_REGS; i ++) {
+
+        fprintf (log_file, "%cx: [%d]  ", 'a' + i, cpu->reg [i]);
+    }
+
+    fputs ("\n\n__________________________________\n\n\n", log_file);
+
+    fclose (log_file);
+}
+
+static void clean_buffer_memory (unsigned char *code_buffer) {
 
     if (code_buffer) {
 
