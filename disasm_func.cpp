@@ -1,36 +1,50 @@
-#include "cpu.hpp"
+#include "disasm.hpp"
 
-static size_t get_file_size (FILE *file);
-static int get_num_of_digits_int (int number);
-static int get_num_of_digits_sizet (size_t number);
-static int verify_code_architecture (unsigned char *code_buffer);
-static int verify_cmd_code (size_t byte_number, unsigned char cmd_code);
+// SHOULD BE DELETED:
 
-static size_t get_file_size (FILE *file) {
+const char *CMD_NAMES [] = {"hlt" /* 0 */, "push" /* 1 */, "pop" /* 2 */, "add" /* 3 */, "sub" /* 4 */, "mul" /* 5 */,              \
+                            "div" /* 6 */, "in" /* 7 */, "out" /* 8 */, "stdmp" /* 9 */, "stvrf" /* 10 */, "rgdmp" /* 11 */,        \
+                            "jmp" /* 12 */, "ja" /* 13 */, "jae" /* 14 */, "jb" /* 15 */, "jbe" /* 16 */, "je" /* 17 */,            \
+                            "jne" /* 18 */, "jf" /* 19 */, "call" /* 20 */, "ret" /* 21 */, "astdmp" /* 22 */, "astvrf" /* 23 */};
 
-    assert (file);
+// ;
 
-    fseek (file, NO_OFFSET, SEEK_END);
-    size_t file_size = (size_t) ftell (file);
+void verify_disasm_launch_parameters (int argc) {
 
-    rewind (file);
-    return file_size;
+    if (! (argc == 2 || argc == 3)) {
+
+        printf ("\nWrong input, please insert codefile name and then (additionally) program file name only\n");
+        exit (EXIT_FAILURE);
+    }
 }
 
-static int verify_code_architecture (unsigned char *code_buffer) {
+int verify_disasm_code_signature (unsigned char *code_buffer) {
 
     assert (code_buffer);
 
+    if ((*((code_info_t *) code_buffer)).sig != 'QO') {
+
+        printf ("\nDISASSEMBLING FAULT: INVALID FILE TYPE\n");
+        return ERROR;
+    }
+
     if ((*((code_info_t *) code_buffer)).arch != 'CISC') {
 
-        printf ("\nDISASSEMBLING FAULT: WRONG CODE ARCHITECTURE\n");
+        printf ("\nDISASSEMBLING FAULT: INCONGRUENT CODE ARCHITECTURE\n");
         return ERROR;
     }
 
     return SUCCESS;
 }
 
-static int verify_cmd_code (size_t byte_number, unsigned char cmd_code) {
+FILE *open_prog_file (int argc, char *argv []) {
+
+    assert (argv);
+
+    return (argc == 2) ? (fopen ("QO_prog_file.asm", "w")) : (fopen (argv [2], "w"));
+}
+
+int verify_cmd_code (size_t byte_number, unsigned char cmd_code) {
 
     if ((cmd_code & ONLY_CMD_TYPE_MASK) > NUM_OF_CMD_TYPES - 1) {
 
@@ -39,39 +53,6 @@ static int verify_cmd_code (size_t byte_number, unsigned char cmd_code) {
     }
 
     return SUCCESS;
-}
-
-static int get_num_of_digits_int (int number) {
-
-    int num_of_digits = 0;
-
-    if (number < 0) {
-
-        num_of_digits = 1;
-    }
-
-    do {
-
-        number /= 10;
-        num_of_digits += 1;
-
-    } while (number != 0);
-
-    return num_of_digits;
-}
-
-static int get_num_of_digits_sizet (size_t number) {
-
-    int num_of_digits = 0;
-
-    do {
-
-        number /= 10;
-        num_of_digits += 1;
-
-    } while (number != 0);
-
-    return num_of_digits;
 }
 
 unsigned char *store_code (FILE *code_file, size_t *code_buffer_size) {
@@ -84,7 +65,7 @@ unsigned char *store_code (FILE *code_file, size_t *code_buffer_size) {
     unsigned char *code_buffer = (unsigned char *) calloc (code_file_size, sizeof (unsigned char));
     if (code_buffer == NULL) {
 
-        printf ("\nLOADING FAULT: MEMERY ERROR\n");
+        printf ("\nLOADING FAULT: MEMORY ERROR\n");
         exit (EXIT_FAILURE);
     }
 
@@ -148,7 +129,7 @@ size_t estimate_prog_size (unsigned char* code_buffer, size_t code_buffer_size) 
 
         if (code_buffer [bytes_handled] & IMM_BIT_MASK) {
 
-            max_cmds_size += sizeof (char) * get_num_of_digits_int (*((int *) (code_buffer + bytes_handled + sizeof (unsigned char) + bytes_diff)));
+            max_cmds_size += sizeof (char) * (get_num_of_digits_int (*((int *) (code_buffer + bytes_handled + sizeof (unsigned char) + bytes_diff))) + 1);
             bytes_diff += sizeof (int);
         }
 
@@ -161,11 +142,10 @@ size_t estimate_prog_size (unsigned char* code_buffer, size_t code_buffer_size) 
 int disassemble_code (unsigned char* code_buffer, size_t code_buffer_size, char *prog_buffer, size_t *disassembled_cmds_size) {
 
     assert (code_buffer);
-    assert (code_buffer_size >= 0);
     assert (prog_buffer);
     assert (disassembled_cmds_size);
 
-    if (verify_code_architecture (code_buffer - sizeof (code_info_t))) {
+    if (verify_disasm_code_signature (code_buffer - sizeof (code_info_t))) {
 
         return ERROR;
     }
@@ -244,10 +224,10 @@ int disassemble_code (unsigned char* code_buffer, size_t code_buffer_size, char 
 
         if (code_buffer [bytes_handled] & IMM_BIT_MASK) {
 
-            int arg = 0;
-            arg = *((int *) (code_buffer + bytes_handled + sizeof (unsigned char) + bytes_diff));
-            sprintf (prog_buffer + handled_cmds_size, "%d", arg);
-            handled_cmds_size += sizeof (char) * get_num_of_digits_int (arg);
+            int num_int = *((int *) (code_buffer + bytes_handled + sizeof (unsigned char) + bytes_diff));
+            float num_fl = convert_int_1000_to_float (num_int);
+            sprintf (prog_buffer + handled_cmds_size, "%.3f", num_fl);
+            handled_cmds_size += sizeof (char) * (get_num_of_digits_int (num_int / 1000) + 4);
             bytes_diff += sizeof (int);
         }
 
@@ -272,7 +252,6 @@ void upload_prog (char *prog_buffer, FILE *prog_file, size_t disassembled_cmds_s
 
     assert (prog_buffer);
     assert (prog_file);
-    assert (disassembled_cmds_size >= 0);
 
     fwrite (prog_buffer, sizeof (char), disassembled_cmds_size, prog_file);
 }

@@ -1,10 +1,14 @@
+#include "common.hpp"
 #include "cpu.hpp"
-#include "stack_func.cpp"
 
-static size_t get_file_size (FILE *file);
-static int verify_code_architecture (unsigned char *code_buffer);
-static void clean_buffer_memory (unsigned char *code_buffer);
-static void reg_dump (cpu_t *cpu, int line);
+// SHOULD BE DELETED:
+
+const char *CMD_NAMES [] = {"hlt" /* 0 */, "push" /* 1 */, "pop" /* 2 */, "add" /* 3 */, "sub" /* 4 */, "mul" /* 5 */,              \
+                            "div" /* 6 */, "in" /* 7 */, "out" /* 8 */, "stdmp" /* 9 */, "stvrf" /* 10 */, "rgdmp" /* 11 */,        \
+                            "jmp" /* 12 */, "ja" /* 13 */, "jae" /* 14 */, "jb" /* 15 */, "jbe" /* 16 */, "je" /* 17 */,            \
+                            "jne" /* 18 */, "jf" /* 19 */, "call" /* 20 */, "ret" /* 21 */, "astdmp" /* 22 */, "astvrf" /* 23 */};
+
+// ;
 
 void cpu_ctor (cpu_t *cpu) {
 
@@ -55,20 +59,24 @@ void cpu_dtor (cpu_t *cpu) {
     addr_stack_dtor (&(cpu->addr_stack));
 }
 
-static size_t get_file_size (FILE *file) {
+void verify_cpu_launch_parameters (int argc) {
 
-    assert (file);
+    if (argc != 2) {
 
-    fseek (file, NO_OFFSET, SEEK_END);
-    size_t file_size = (size_t) ftell (file);
-
-    rewind (file);
-    return file_size;
+        printf ("\nWrong input, please insert codefile name only\n");
+        exit (EXIT_FAILURE);
+    }
 }
 
-static int verify_code_architecture (unsigned char *code_buffer) {
+int verify_cpu_code_signature (unsigned char *code_buffer) {
 
     assert (code_buffer);
+
+    if ((*((code_info_t *) code_buffer)).sig != 'QO') {
+
+        printf ("\nEXECUTION FAULT: INVALID FILE TYPE\n");
+        return ERROR;
+    }
 
     if ((*((code_info_t *) code_buffer)).arch != 'CISC') {
 
@@ -78,7 +86,29 @@ static int verify_code_architecture (unsigned char *code_buffer) {
             return ERROR;
         }
 
-        printf ("\nEXECUTION FAULT: WRONG CODE ARCHITECTURE\n");
+        printf ("\nEXECUTION FAULT: INCONGRUENT CODE ARCHITECTURE\n");
+        return ERROR;
+    }
+
+    return SUCCESS;
+}
+
+int verify_in_num (float num) {
+
+    if (((float) INT_MAX) / 1000 < num) {
+
+        printf ("\nEXECUTION FAULT: MAX NUMBER ARGUMENT VALUE EXCEEDED\n");
+        return ERROR;
+    }
+
+    return SUCCESS;
+}
+
+int verify_segmentation (int addr) {
+
+    if (addr < 0 || addr > RAM_SIZE) {
+
+        printf ("\nSEGMENTATION FAULT; EMULATION TERMINATED\n");
         return ERROR;
     }
 
@@ -95,7 +125,7 @@ void load_code (FILE *code_file, cpu_t *cpu) {
     cpu->code = (unsigned char *) calloc (code_file_size, sizeof (unsigned char));
     if (cpu->code == NULL) {
 
-        printf ("\nLOADING FAULT: MEMERY ERROR\n");
+        printf ("\nLOADING FAULT: MEMORY ERROR\n");
         exit (EXIT_FAILURE);
     }
 
@@ -110,7 +140,7 @@ int execute_code (cpu_t *cpu) {
 
     assert (cpu);
 
-    if (verify_code_architecture (cpu->code - sizeof (code_info_t))) {
+    if (verify_cpu_code_signature (cpu->code - sizeof (code_info_t))) {
 
         return ERROR;
     }
@@ -135,17 +165,38 @@ int execute_code (cpu_t *cpu) {
 
                         if (cpu->code [cpu->ip] & IMM_BIT_MASK) {
 
-                            stack_push (stack_p, cpu->ram [cpu->reg [*((unsigned char *) (cpu->code + cpu->ip + sizeof (unsigned char)))] + *((int *) (cpu->code + cpu->ip + 2 * sizeof (unsigned char)))]);
+                            int addr = cpu->reg [*((unsigned char *) (cpu->code + cpu->ip + sizeof (unsigned char)))] / 1000 + *((int *) (cpu->code + cpu->ip + 2 * sizeof (unsigned char)));
+                            if (verify_segmentation (addr)) {
+
+                                stack_dtor (stack_p);
+                                return ERROR;
+                            }
+
+                            stack_push (stack_p, cpu->ram [addr]);
                             cpu->ip += sizeof (unsigned char) + sizeof (int);
 
                         } else {
 
-                            stack_push (stack_p, cpu->ram [cpu->reg [*((unsigned char *) (cpu->code + cpu->ip + sizeof (unsigned char)))]]);
+                            int addr = cpu->reg [*((unsigned char *) (cpu->code + cpu->ip + sizeof (unsigned char)))] / 1000;
+                            if (verify_segmentation (addr)) {
+
+                                stack_dtor (stack_p);
+                                return ERROR;
+                            }
+
+                            stack_push (stack_p, cpu->ram [addr]);
                             cpu->ip += sizeof (unsigned char);
                         }
                     } else {
 
-                        stack_push (stack_p, cpu->ram [*((int *) (cpu->code + cpu->ip + sizeof (unsigned char)))]);
+                        int addr = *((int *) (cpu->code + cpu->ip + sizeof (unsigned char)));
+                        if (verify_segmentation (addr)) {
+
+                            stack_dtor (stack_p);
+                            return ERROR;
+                        }
+
+                        stack_push (stack_p, cpu->ram [addr]);
                         cpu->ip += sizeof (int);
                     }
                 } else {
@@ -180,17 +231,38 @@ int execute_code (cpu_t *cpu) {
 
                         if (cpu->code [cpu->ip] & IMM_BIT_MASK) {
 
-                            cpu->ram [cpu->reg [*((unsigned char *) (cpu->code + cpu->ip + sizeof (unsigned char)))] + *((int *) (cpu->code + cpu->ip + 2 * sizeof (unsigned char)))] = stack_pop (stack_p);
+                            int addr = cpu->reg [*((unsigned char *) (cpu->code + cpu->ip + sizeof (unsigned char)))] / 1000 + *((int *) (cpu->code + cpu->ip + 2 * sizeof (unsigned char)));
+                            if (verify_segmentation (addr)) {
+
+                                stack_dtor (stack_p);
+                                return ERROR;
+                            }
+
+                            cpu->ram [addr] = stack_pop (stack_p);
                             cpu->ip += sizeof (int) + sizeof (unsigned char);
 
                         } else {
 
-                            cpu->ram [cpu->reg [*((unsigned char *) (cpu->code + cpu->ip + sizeof (unsigned char)))]] = stack_pop (stack_p);
+                            int addr = cpu->reg [*((unsigned char *) (cpu->code + cpu->ip + sizeof (unsigned char)))] / 1000;
+                            if (verify_segmentation (addr)) {
+
+                                stack_dtor (stack_p);
+                                return ERROR;
+                            }
+
+                            cpu->ram [addr] = stack_pop (stack_p);
                             cpu->ip += sizeof (unsigned char);
                         }
                     } else {
 
-                        cpu->ram [*((int *) (cpu->code + cpu->ip + sizeof (unsigned char)))] = stack_pop (stack_p);
+                        int addr = *((int *) (cpu->code + cpu->ip + sizeof (unsigned char)));
+                        if (verify_segmentation (addr)) {
+
+                            stack_dtor (stack_p);
+                            return ERROR;
+                        }
+
+                        cpu->ram [addr] = stack_pop (stack_p);
                         cpu->ip += sizeof (int);
                     }
                 } else {
@@ -217,34 +289,43 @@ int execute_code (cpu_t *cpu) {
 
             case SUB: {
 
-                stack_push (stack_p, - stack_pop (stack_p) + stack_pop (stack_p));
+                int temp_val = stack_pop (stack_p);
+                stack_push (stack_p, stack_pop (stack_p) - temp_val);
                 break;
             }
 
             case MUL: {
 
-                stack_push (stack_p, stack_pop (stack_p) * stack_pop (stack_p));
+                stack_push (stack_p, stack_pop (stack_p) * stack_pop (stack_p) / 1000);
                 break;
             }
 
             case DIV: {
 
                 int temp_val = stack_pop (stack_p);
-                stack_push (stack_p, stack_pop (stack_p) / temp_val);
+                stack_push (stack_p, (stack_pop (stack_p) * 1000) / temp_val);
                 break;
             }
 
             case IN: {
 
-                int temp_val = 0;
-                scanf ("%d", &temp_val);
-                stack_push (stack_p, temp_val);
+                float num_fl = 0;
+                scanf ("%f", &num_fl);
+                if (verify_in_num (num_fl)) {
+
+                    stack_dtor (stack_p);
+                    return ERROR;
+                }
+
+                int num_int = convert_float_to_int_1000 (num_fl);
+                stack_push (stack_p, num_int);
                 break;
             }
 
             case OUT: {
 
-                printf ("%d\n", stack_pop (stack_p));
+                float num_fl = convert_int_1000_to_float (stack_pop (stack_p));
+                printf ("%.3f\n", num_fl);
                 break;
             }
 
@@ -284,6 +365,10 @@ int execute_code (cpu_t *cpu) {
                 if (temp_val1 > temp_val2) {
 
                     cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+
+                } else {
+
+                    cpu->ip += sizeof (size_t);
                 }
 
                 break;
@@ -298,6 +383,10 @@ int execute_code (cpu_t *cpu) {
                 if (temp_val1 >= temp_val2) {
 
                     cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+
+                } else {
+
+                    cpu->ip += sizeof (size_t);
                 }
 
                 break;
@@ -312,6 +401,10 @@ int execute_code (cpu_t *cpu) {
                 if (temp_val1 < temp_val2) {
 
                     cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+
+                } else {
+
+                    cpu->ip += sizeof (size_t);
                 }
 
                 break;
@@ -326,6 +419,10 @@ int execute_code (cpu_t *cpu) {
                 if (temp_val1 <= temp_val2) {
 
                     cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+
+                } else {
+
+                    cpu->ip += sizeof (size_t);
                 }
 
                 break;
@@ -340,6 +437,10 @@ int execute_code (cpu_t *cpu) {
                 if (temp_val1 == temp_val2) {
 
                     cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+
+                } else {
+
+                    cpu->ip += sizeof (size_t);
                 }
 
                 break;
@@ -354,6 +455,10 @@ int execute_code (cpu_t *cpu) {
                 if (temp_val1 != temp_val2) {
 
                     cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+
+                } else {
+
+                    cpu->ip += sizeof (size_t);
                 }
 
                 break;
@@ -365,6 +470,10 @@ int execute_code (cpu_t *cpu) {
                 if (localtime (&tim)->tm_wday == FRIDAY) {
 
                     cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
+
+                } else {
+
+                    cpu->ip += sizeof (size_t);
                 }
 
                 break;
@@ -372,7 +481,7 @@ int execute_code (cpu_t *cpu) {
 
             case CALL: {
 
-                addr_stack_push (addr_stack_p, cpu->ip + sizeof (unsigned char));
+                addr_stack_push (addr_stack_p, cpu->ip + sizeof (size_t) + sizeof (unsigned char));
                 cpu->ip = *((size_t *) (cpu->code + cpu->ip + sizeof (unsigned char))) - sizeof (unsigned char);
 
                 break;
@@ -413,7 +522,7 @@ int execute_code (cpu_t *cpu) {
     return SUCCESS;
 }
 
-static void reg_dump (cpu_t *cpu, int line) {
+void reg_dump (cpu_t *cpu, int line) {
 
     FILE *log_file = fopen ("LOG.txt", "a");
 
@@ -429,7 +538,7 @@ static void reg_dump (cpu_t *cpu, int line) {
     fclose (log_file);
 }
 
-static void clean_buffer_memory (unsigned char *code_buffer) {
+void clean_buffer_memory (unsigned char *code_buffer) {
 
     if (code_buffer) {
 
