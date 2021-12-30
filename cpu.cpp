@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include "common.hpp"
 #include "cpu.hpp"
 
 int main (int argc, char *argv []) {

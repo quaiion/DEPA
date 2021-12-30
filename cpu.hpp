@@ -6,6 +6,7 @@
 #include <time.h>
 #include <malloc.h>
 #include "cpu_stack.hpp"
+#include "common.hpp"
 
 #define FRIDAY 5
 

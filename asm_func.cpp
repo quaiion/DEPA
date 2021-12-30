@@ -1,14 +1,5 @@
 #include "asm.hpp"
 
-// SHOULD BE DELETED:
-
-const char *CMD_NAMES [] = {"hlt" /* 0 */, "push" /* 1 */, "pop" /* 2 */, "add" /* 3 */, "sub" /* 4 */, "mul" /* 5 */,              \
-                            "div" /* 6 */, "in" /* 7 */, "out" /* 8 */, "stdmp" /* 9 */, "stvrf" /* 10 */, "rgdmp" /* 11 */,        \
-                            "jmp" /* 12 */, "ja" /* 13 */, "jae" /* 14 */, "jb" /* 15 */, "jbe" /* 16 */, "je" /* 17 */,            \
-                            "jne" /* 18 */, "jf" /* 19 */, "call" /* 20 */, "ret" /* 21 */, "astdmp" /* 22 */, "astvrf" /* 23 */};
-
-// ;
-
 constexpr int format0_const_line_length = 31;
 constexpr int format1_const_line_length = 37;
 constexpr int format2_const_line_length = 35;
@@ -644,7 +635,7 @@ int assemble_prog (char **cmd_index_tbl, int num_of_cmds, unsigned char *code_bu
                     cmd_code |= REG_BIT_MASK;
                     cmd_code |= IMM_BIT_MASK;
                     sprintf (listing_buffer + symbs_listed, "%.4llX   %.2X   %.2X  %.2X %.2X %.2X %.2X   %s [%cx+%d]\n",   \
-                             handled_code_size + sizeof (code_info_t), cmd_code, reg - 'a',   \
+                             handled_code_size + sizeof (code_info_t), cmd_code, reg - 'a',     \
                              *(code_buffer + handled_code_size + 2 * sizeof (unsigned char)),   \
                              *(code_buffer + handled_code_size + 3 * sizeof (unsigned char)),   \
                              *(code_buffer + handled_code_size + 4 * sizeof (unsigned char)),   \
