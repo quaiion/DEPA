@@ -3,20 +3,32 @@
 
 int main (int argc, char *argv []) {
 
-    verify_asm_launch_parameters (argc);
+    if (verify_asm_launch_parameters (argc) ||
+        verify_cmd_num () || verify_videomem ()) {
+
+        return 0;
+    }
 
     int no_err = SUCCESS;
 
     FILE *prog_file = fopen (argv [1], "r");
     char *cmd_buffer = store_cmds (prog_file);
+    if (cmd_buffer == NULL) {
+
+        return 0;
+    }
     fclose (prog_file);
 
     unsigned long num_of_cmds = get_num_of_cmds (cmd_buffer);
     cmd_idx_t *cmd_index_tbl = index_cmds (cmd_buffer, num_of_cmds);
+    if (cmd_index_tbl == NULL) {
+
+        return 0;
+    }
 
     size_t code_size = 0;
     mark_t *mark_tbl = NULL;
-    int num_of_marks = 0;
+    unsigned num_of_marks = 0;
     no_err += preassemble_prog (cmd_index_tbl, num_of_cmds, &mark_tbl, &num_of_marks, &code_size);
 
     unsigned char *code_buffer = NULL;

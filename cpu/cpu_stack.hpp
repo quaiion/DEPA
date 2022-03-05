@@ -5,6 +5,7 @@
 #include <malloc.h>
 #include <limits.h>
 #include <string.h>
+#include <cstdint>
 
 struct stack_t {
 

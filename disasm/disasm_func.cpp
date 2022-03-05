@@ -1,15 +1,17 @@
 #include "disasm.hpp"
 
-static char *resize_prog_buffer (char *prog_buffer, size_t buffer_size, size_t buffer_cap);
+static int resize_prog_buffer (char **prog_buffer, size_t buffer_size, size_t *buffer_cap);
 static int verify_disasm_code_signature (unsigned char *code_buffer);
 
-void verify_disasm_launch_parameters (int argc) {
+int verify_disasm_launch_parameters (int argc) {
 
     if (! (argc == 2 || argc == 3)) {
 
         printf ("\nWrong input, please insert codefile name and then (additionally) program file name only\n");
-        exit (EXIT_FAILURE);
+        return ERROR;
     }
+
+    return SUCCESS;
 }
 
 static int verify_disasm_code_signature (unsigned char *code_buffer) {
@@ -86,9 +88,9 @@ int disassemble_code (unsigned char* code_buffer, size_t code_buffer_size, char 
 #define CMD_PATTERN(name_cnst, token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) \
             case name_cnst: { \
                 \
-                prog_buffer = resize_prog_buffer (prog_buffer, (prog_ptr - prog_buffer) + \
-                                                  sizeof (##token) + max_disasm_arg_len + 2 * sizeof (char), *prog_buffer_cap); \
-                if (prog_buffer == NULL) { \
+                int resize_res = resize_prog_buffer (&prog_buffer, (size_t) (prog_ptr - prog_buffer) + \
+                                                  sizeof (#token) + max_disasm_arg_len + 2 * sizeof (char), &prog_buffer_cap); \
+                if (resize_res == ERROR) { \
                     \
                     printf ("\nDISASSEMBLING FAULT: MEMORY ERROR\n"); \
                     signal.stop = true; \
@@ -96,7 +98,7 @@ int disassemble_code (unsigned char* code_buffer, size_t code_buffer_size, char 
                     break; \
                 } \
                 \
-                strcpy (prog_ptr, ##token); \
+                strcpy (prog_ptr, #token); \
                 prog_ptr = strchr (prog_ptr, '\0'); \
                 \
                 char *arg_str = (char *) calloc (max_disasm_arg_len, sizeof (char)); \
@@ -112,7 +114,7 @@ int disassemble_code (unsigned char* code_buffer, size_t code_buffer_size, char 
                     break; \
                 } \
                 \
-                if ((arg_str != '\0')) { \
+                if ((*arg_str != '\0')) { \
                     \
                     *prog_ptr = ' '; \
                     prog_ptr += sizeof (char); \
@@ -133,7 +135,7 @@ int disassemble_code (unsigned char* code_buffer, size_t code_buffer_size, char 
 
             default: {
 
-                printf ("\nbyte %llu: DISASSEMBLING FAULT: UNKNOWN COMMAND CODE\n", bytes_handled + sizeof (code_info_t));
+                printf ("\nbyte %lu: DISASSEMBLING FAULT: UNKNOWN COMMAND CODE\n", bytes_handled + sizeof (code_info_t));
                 return ERROR;
             }
         }
@@ -155,20 +157,25 @@ int disassemble_code (unsigned char* code_buffer, size_t code_buffer_size, char 
     return SUCCESS;
 }
 
-static char *resize_prog_buffer (char *prog_buffer, size_t expected_buf_size, size_t *buf_cap) {
+static int resize_prog_buffer (char **prog_buffer, size_t expected_buf_size, size_t *buf_cap) {
 
     while (expected_buf_size >= *buf_cap) {
 
         size_t old_cap = *buf_cap;
         *buf_cap *= 2;
-        prog_buffer = (char *) realloc (prog_buffer, *buf_cap);
-        if (prog_buffer) {
+        char *real_mem_ptr = (char *) realloc (prog_buffer, *buf_cap);
+        if (real_mem_ptr) {
 
-            memset (prog_buffer + old_cap, '\0', old_cap);
+            *prog_buffer = real_mem_ptr;
+            memset (real_mem_ptr + old_cap, '\0', old_cap);
+
+        } else {
+
+            return ERROR;
         }
     }
 
-    return prog_buffer;
+    return SUCCESS;
 }
 
 void upload_prog (char *prog_buffer, FILE *prog_file, size_t disassembled_cmds_size) {

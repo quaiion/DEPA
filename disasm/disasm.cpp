@@ -3,7 +3,11 @@
 
 int main (int argc, char *argv []) {
 
-    verify_disasm_launch_parameters (argc);
+    if (verify_disasm_launch_parameters (argc) ||
+        verify_cmd_num () || verify_videomem ()) {
+
+        return 0;
+    }
 
     int no_err = SUCCESS;
 
@@ -12,7 +16,7 @@ int main (int argc, char *argv []) {
     unsigned char *code_buffer = store_code (code_file, &code_buffer_size);
     fclose (code_file);
 
-    char *prog_buffer = (char *) malloc (DEFAULT_PROG_BUFFER_SIZE, sizeof (char));
+    char *prog_buffer = (char *) malloc (DEFAULT_PROG_BUFFER_SIZE * sizeof (char));
     if (prog_buffer == NULL) {
 
         printf ("\nDISASSEMBLING FAULT: MEMORY ERROR\n");

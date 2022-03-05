@@ -4,14 +4,21 @@
 отдельно стоит отметить, что по этой причине все alg-аргументы паттернов должны
 в обязательном порядке иметь завершающий символ ";" (если не оканчиваются
 закрытием блока)
-указать что первые три бита не могут быть заняты типом команды, поэтому
-максимум 32 штуки
+указать что старшие три бита не могут быть заняты типом команды, поэтому
+максимум 31 штука
 сказать про функции-верифайеры и про то что можно и без них
 энкодер должен проставлять end-символы
 про управление через signal (с возможностью немедленного выхода через break) 
 в ectrac иметь в виду, что bytes_handled стоит на бацте команды к моменту вызова
 и про то, как работает code_ptr (указывает на байт команды)
-у листинга маловато знаков в номере байта + слишком много аргументов поломают его нахрен + ограничение на размер записи в строке - по сути он просто колчественно ограничен по все параметрам, но не очень жестко ------ УКАЗАТЬ ВОЗМОЖНОСТЬ РЕДАКТИВРОВАТЬ ЭТИ ПАРАМЕТРЫ */
+у листинга маловато знаков в номере байта + слишком много аргументов поломают его нахрен + ограничение на размер записи в строке - по сути он просто колчественно ограничен по все параметрам, но не очень жестко ------ УКАЗАТЬ ВОЗМОЖНОСТЬ РЕДАКТИВРОВАТЬ ЭТИ ПАРАМЕТРЫ 
+в коммите не забыть упомянуть про решенные проблемы с реаллокацией памяти 
+не забыть написать про то, что я писал Димасу 6 февраля вечером
+и собственно про то, что эту "фичу" мы так или иначе использовали и в асме, и в экзекьюторе (немного ускоряет алгоритм?)
+строго говоря, можно было в асме сразу вешать числа, связанные этой битовой структурой, но мы избрали путь с масками
+обязательно упомянуть, почему выбран именно такой способ кодогенерации (сохранение побитовой фишки в сочетании с возможностью добавления команд любого профиля, с любым размером и типом исходных аргументов и с любым форматом и количеством ИТОГОВЫХ аргументов) - фактически, это вынуждает писать конкретный алгоритм считывания аргументов вместо каких-то отдельных характерных значений акак кол-во аргументов, зато сохраняет уникальные свойства кодировки бинарника и позволят вставлять команды практически без ограничений
+отметить в коммите, что поправлена ошибка с повторной деструкцией стека
+не забудь про массивы и enum'ы с литералами и константами команд, которые тоже нужно подцепить к дефайнам */
 
 #define HLT_EXEC signal.stop = true;
 
@@ -22,7 +29,7 @@
     int imm_arg = NO_IMM; \
     char reg_arg = NO_REG; \
     bool ram_mode = false; \
-    int ip_offset = 0; \
+    size_t ip_offset = 0; \
     \
     if (*code_ptr & RAM_BIT_MASK) { \
         \
@@ -42,7 +49,7 @@
         if (*code_ptr & IMM_BIT_MASK) { \
             \
             imm_arg = *((int *) (code_ptr + 2 * sizeof (unsigned char))); \
-            ip_offset = += sizeof (int); \
+            ip_offset += sizeof (int); \
             \
         } \
     } else if (*code_ptr & IMM_BIT_MASK) { \
@@ -69,7 +76,7 @@
             \
             addr = imm_arg; \
         } \
-            \
+        \
         if (verify_segmentation (addr)) { \
             \
             signal.stop = true; \
@@ -91,13 +98,20 @@
         } \
         \
         stack_push (stack_p, val); \
+    } \
+    \
+    if (verify_stack_mem (stack_p)) { \
+        \
+        signal.stop = true; \
+        signal.err = true; \
+        break; \
     }
 
 #define POP_ARG_EXTRAC \
     int imm_arg = NO_IMM; \
     char reg_arg = NO_REG; \
     bool ram_mode = false; \
-    int ip_offset = 0; \
+    size_t ip_offset = 0; \
     \
     if (*code_ptr & RAM_BIT_MASK) { \
         \
@@ -107,7 +121,7 @@
     if (*code_ptr & REG_BIT_MASK) { \
         \
         reg_arg = *((char *) (code_ptr + sizeof (unsigned char))); \
-        if (verify_reg_num (reg)) { \
+        if (verify_reg_num (reg_arg)) { \
             \
             signal.stop = true; \
             signal.err = true; \
@@ -186,16 +200,47 @@
         } \
     }
 
-#define ADD_EXEC stack_push (stack_p, stack_pop (stack_p) + stack_pop (stack_p));
-#define MUL_EXEC stack_push (stack_p, stack_pop (stack_p) * stack_pop (stack_p) / 1000);
+#define ADD_EXEC \
+    stack_push (stack_p, stack_pop (stack_p) + stack_pop (stack_p)); \
+    \
+    if (verify_stack_mem (stack_p)) { \
+        \
+        signal.stop = true; \
+        signal.err = true; \
+        break; \
+    }
+
+#define MUL_EXEC \
+    stack_push (stack_p, stack_pop (stack_p) * stack_pop (stack_p) / 1000); \
+    \
+    if (verify_stack_mem (stack_p)) { \
+        \
+        signal.stop = true; \
+        signal.err = true; \
+        break; \
+    }
 
 #define SUB_EXEC \
     int temp_val = stack_pop (stack_p); \
-    stack_push (stack_p, stack_pop (stack_p) - temp_val);
+    stack_push (stack_p, stack_pop (stack_p) - temp_val); \
+    \
+    if (verify_stack_mem (stack_p)) { \
+        \
+        signal.stop = true; \
+        signal.err = true; \
+        break; \
+    }
 
 #define DIV_EXEC \
     int temp_val = stack_pop (stack_p); \
-    stack_push (stack_p, (stack_pop (stack_p) * 1000) / temp_val);
+    stack_push (stack_p, (stack_pop (stack_p) * 1000) / temp_val); \
+    \
+    if (verify_stack_mem (stack_p)) { \
+        \
+        signal.stop = true; \
+        signal.err = true; \
+        break; \
+    }
 
 #define IN_EXEC \
     float num_fl = 0; \
@@ -207,7 +252,14 @@
     } \
     \
     int num_int = convert_float_to_int_1000 (num_fl); \
-    stack_push (stack_p, num_int);
+    stack_push (stack_p, num_int); \
+    \
+    if (verify_stack_mem (stack_p)) { \
+        \
+        signal.stop = true; \
+        signal.err = true; \
+        break; \
+    }
 
 #define OUT_EXEC \
     float num_fl = convert_int_1000_to_float (stack_pop (stack_p)); \
@@ -225,23 +277,37 @@
 #define BYTE_POS_EXTRAC \
     size_t byte_pos = *((size_t *) (code_ptr + sizeof (unsigned char))) - sizeof (unsigned char);
 
-#define JMP_EXEC cpu->ip = byte_pos - arg_byte_size;
+#define JMP_EXEC cpu->ip = byte_pos - arg_size;
 
 #define JF_EXEC \
     time_t tim = time (NULL); \
     if (localtime (&tim)->tm_wday == FRIDAY) { \
         \
-        cpu->ip = byte_pos - arg_byte_size; \
+        cpu->ip = byte_pos - arg_size; \
     }
 
 #define COMMON_COND_JMP_EXEC(cond) \
     int temp_val_2 = stack_pop (stack_p), temp_val_1 = stack_pop (stack_p); \
+    \
     stack_push (stack_p, temp_val_1); \
+    if (verify_stack_mem (stack_p)) { \
+        \
+        signal.stop = true; \
+        signal.err = true; \
+        break; \
+    } \
+    \
     stack_push (stack_p, temp_val_2); \
+    if (verify_stack_mem (stack_p)) { \
+        \
+        signal.stop = true; \
+        signal.err = true; \
+        break; \
+    } \
     \
     if (cond) { \
         \
-        cpu->ip = byte_pos - arg_byte_size; \
+        cpu->ip = byte_pos - arg_size; \
     }
 
 #define JA_COND temp_val_1 > temp_val_2
@@ -253,33 +319,40 @@
 
 #define CALL_EXEC \
     addr_stack_push (addr_stack_p, cpu->ip + sizeof (size_t)); \
-    cpu->ip = byte_pos - arg_byte_size;
+    if (verify_addr_stack_mem (addr_stack_p)) { \
+        \
+        signal.stop = true; \
+        signal.err = true; \
+        break; \
+    } \
+    \
+    cpu->ip = byte_pos - arg_size;
 
 #define RET_EXEC cpu->ip = addr_stack_pop (addr_stack_p);
 
 #define IRR_PREASM \
-    int ip_offset = 0; \
+    size_t ip_offset = 0; \
     if (strchr (space, '[')) { \
         \
-        cmd_index_tbl [cmds_handled]->cmd_cnst |= RAM_BIT_MASK; \
+        cmd_index_tbl [cmds_handled].cmd_cnst |= RAM_BIT_MASK; \
     } \
     if (strchr (space, 'x')) { \
         \
-        cmd_index_tbl [cmds_handled]->cmd_cnst |= REG_BIT_MASK; \
+        cmd_index_tbl [cmds_handled].cmd_cnst |= REG_BIT_MASK; \
         ip_offset = sizeof (unsigned char); \
         if (strchr (space, '+')) { \
             \
-            cmd_index_tbl [cmds_handled]->cmd_cnst |= IMM_BIT_MASK; \
+            cmd_index_tbl [cmds_handled].cmd_cnst |= IMM_BIT_MASK; \
             ip_offset += sizeof (int); \
         } \
-    } else if (search_digit (space))) { \
+    } else if (search_digit (space)) { \
         \
-        cmd_index_tbl [cmds_handled]->cmd_cnst |= IMM_BIT_MASK; \
+        cmd_index_tbl [cmds_handled].cmd_cnst |= IMM_BIT_MASK; \
         ip_offset = sizeof (int); \
     }
 
 #define PUSH_ARG_ASM \
-    int ip_offset = 0; \
+    size_t ip_offset = 0; \
     if (cmd_cnst & RAM_BIT_MASK) { \
         \
         if (cmd_cnst & REG_BIT_MASK) { \
@@ -288,7 +361,7 @@
             \
             if (cmd_cnst & IMM_BIT_MASK) { \
                 \
-                sscanf (space + 1, "[%cx+%d]%n%c%c", %reg, &arg, &format, &end_symb_1, &end_symb_2); \
+                sscanf (space + 1, "[%cx+%d]%n%c%c", &reg, &arg, &format, &end_symb_1, &end_symb_2); \
                 if (verify_cmd_arg_format (cmds_assembled + 1, format) || \
                     verify_reg_name (cmds_assembled + 1, reg)) { \
                     \
@@ -342,6 +415,8 @@
             \
             if (cmd_cnst & IMM_BIT_MASK) { \
                 \
+                float fl_num = 0; \
+                \
                 sscanf (space + 1, "%cx+%f%n%c%c", &reg, &fl_num, &format, &end_symb_1, &end_symb_2); \
                 if (verify_cmd_arg_format (cmds_assembled + 1, format) || \
                     verify_reg_name (cmds_assembled + 1, reg) || \
@@ -352,7 +427,7 @@
                     break; \
                 } \
                 \
-                int num_int = convert_float_to_int_1000 (num_fl); \
+                int int_num = convert_float_to_int_1000 (num_fl); \
                 *(code_buffer + handled_code_size) = reg - 'a'; \
                 *((int *) (code_buffer + handled_code_size + sizeof (unsigned char))) = int_num; \
                 ip_offset += sizeof (int); \
@@ -372,6 +447,8 @@
                 \
             } \
         } else if (cmd_cnst & IMM_BIT_MASK) { \
+            \
+            float fl_num = 0; \
             \
             sscanf (space + 1, "%f%n%c%c", &fl_num, &format, &end_symb_1, &end_symb_2); \
             if (verify_cmd_arg_format (cmds_assembled + 1, format) || \
@@ -397,7 +474,7 @@
 
 #define POP_ARG_ASM \
     bool ext_arg = true; \
-    int ip_offset = 0; \
+    size_t ip_offset = 0; \
     \
     if (cmd_cnst & RAM_BIT_MASK) { \
         \
@@ -407,7 +484,7 @@
             \
             if (cmd_cnst & IMM_BIT_MASK) { \
                 \
-                sscanf (space + 1, "[%cx+%d]%n%c%c", %reg, &arg, &format, &end_symb_1, &end_symb_2); \
+                sscanf (space + 1, "[%cx+%d]%n%c%c", &reg, &arg, &format, &end_symb_1, &end_symb_2); \
                 if (verify_cmd_arg_format (cmds_assembled + 1, format) || \
                     verify_reg_name (cmds_assembled + 1, reg)) { \
                     \
@@ -496,7 +573,7 @@
     \
     char mark [MAX_MARK_NAME_BYTE_SIZE + 1] = {}; \
     sscanf (space + 1, "%s%c%c", mark, &end_symb_1, &end_symb_2); \
-    int mark_num = lin_search_mrk (mark, mark_tbl, num_of_marks); \
+    int mark_num = lin_search_mrk (mark, mark_tbl, (int) num_of_marks); \
     if (verify_unknown_mark (cmds_assembled + 1, mark_num)) { \
         \
         signal.stop = true; \
@@ -506,7 +583,7 @@
     *((size_t *) (code_buffer + handled_code_size)) = mark_tbl [mark_num].idx;
 
 #define PUSH_ARG_DIS_PRINT \
-    int symbs = 0; \
+    size_t symbs = 0; \
     \
     if (ram_mode) { \
         \
@@ -537,7 +614,7 @@
     }
 
 #define POP_ARG_DIS_PRINT \
-    int symbs = 0; \
+    size_t symbs = 0; \
     \
     if (ram_mode) { \
         \
@@ -559,7 +636,7 @@
         sprintf (arg_str + symbs, "%d]", imm_arg); \
     }
 
-#define BYTE_POS_DIS_PRINT sprintf (arg_str, "%llu", byte_pos);
+#define BYTE_POS_DIS_PRINT sprintf (arg_str, "%lu", byte_pos);
 
 #define PRNT_EXEC \
     printf ("\n\n"); \

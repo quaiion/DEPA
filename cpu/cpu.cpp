@@ -3,7 +3,11 @@
 
 int main (int argc, char *argv []) {
 
-    verify_cpu_launch_parameters (argc);
+    if (verify_cpu_launch_parameters (argc) ||
+        verify_cmd_num () || verify_videomem ()) {
+
+        return 0;
+    }
 
     cpu_t cpu = {};
     cpu_ctor (&cpu);

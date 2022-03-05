@@ -11,13 +11,15 @@ static int verify_cmd_arg_format (unsigned long line, int format);
 static int lin_search_mrk (char *mark, mark_t *mark_tbl, int nmarks);
 static void upload_listing (char *listing_buffer, size_t listing_size);
 
-void verify_asm_launch_parameters (int argc) {
+int verify_asm_launch_parameters (int argc) {
 
     if (! (argc == 2 || argc == 3)) {
 
         printf ("\nWrong input, please insert program file name and then (additionally) codefile name only\n");
-        exit (EXIT_FAILURE);
+        return ERROR;
     }
+
+    return SUCCESS;
 }
 
 FILE *open_code_file (int argc, char *argv []) {
@@ -37,7 +39,7 @@ char *store_cmds (FILE *prog_file) {
     if (cmd_buffer == NULL) {
 
         printf ("\nLOADING FAULT: MEMORY ERROR\n");
-        exit (EXIT_FAILURE);
+        return NULL;
     }
 
     size_t bytes_read = fread (cmd_buffer, sizeof (char), prog_file_size, prog_file);
@@ -75,12 +77,12 @@ cmd_idx_t *index_cmds (char *cmd_buffer, unsigned long num_of_cmds) {
     if (cmd_index_tbl == NULL) {
 
         printf ("\nASSEMBLING FAULT: MEMORY ERROR\n");
-        exit (EXIT_FAILURE);
+        return NULL;
     }
 
     cmd_index_tbl [0].line = cmd_buffer;
     cmd_buffer = strchr (cmd_buffer, '\n');
-    for (int i = 1; i < num_of_cmds; ++ i) {
+    for (unsigned long i = 1; i < num_of_cmds; ++ i) {
 
         *cmd_buffer = '\0';
         cmd_index_tbl [i].line = cmd_buffer + sizeof (char);
@@ -92,9 +94,9 @@ cmd_idx_t *index_cmds (char *cmd_buffer, unsigned long num_of_cmds) {
         *cmd_buffer = '\0';
     }
 
-    for (int i = 0; i < num_of_cmds; ++ i) {
+    for (unsigned long i = 0; i < num_of_cmds; ++ i) {
 
-        cmd_index_tbl [i]->space = strchr (cmd_index_tbl [i].line, ' ');
+        cmd_index_tbl [i].space = strchr (cmd_index_tbl [i].line, ' ');
     }
 
     return cmd_index_tbl;
@@ -262,24 +264,26 @@ static int verify_cmd_arg_format (unsigned long line, int format) {
     return SUCCESS;
 }
 
-int preassemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, mark_t **mark_tbl, int *num_of_marks, size_t *code_size) {
+int preassemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, mark_t **mark_tbl, unsigned *num_of_marks, size_t *code_size) {
 
     assert (cmd_index_tbl);
+    assert (mark_tbl);
+    assert (code_size);
 
     *mark_tbl = (mark_t *) calloc (DEFAULT_MARK_TABLE_ELEM_SIZE, sizeof (mark_t));
     if (*mark_tbl == NULL) {
 
         printf ("\nASSEMBLING FAULT: MEMORY ERROR\n");
-        exit (EXIT_FAILURE);
+        return ERROR;
     }
-    int mark_tbl_size = DEFAULT_MARK_TABLE_ELEM_SIZE;
+    unsigned mark_tbl_size = DEFAULT_MARK_TABLE_ELEM_SIZE;
 
-    int marks_handled = 0;
+    unsigned marks_handled = 0;
     size_t handled_code_size = 0;
     for (unsigned long cmds_handled = 0; cmds_handled < num_of_cmds; ++cmds_handled) {
 
         char *line = cmd_index_tbl [cmds_handled].line;
-        char *space = cmd_index_tbl [cmds_assembled].space;
+        char *space = cmd_index_tbl [cmds_handled].space;
         assert (line);
 
         char cmd [MAX_CMD_NAME_BYTE_SIZE + sizeof (char)] = {};
@@ -336,6 +340,8 @@ int preassemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, mark_
 
             default: {
 
+                size_t cmd_len = strlen (cmd);
+
                 if (cmd [cmd_len - 1] == ':') {
 
                     if (verify_cmd_end_format (cmds_handled + 1, line [cmd_len], line [cmd_len + 1])) {
@@ -345,8 +351,19 @@ int preassemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, mark_
 
                     if (marks_handled == mark_tbl_size) {
 
-                        *mark_tbl = (mark_t *) realloc (*mark_tbl, mark_tbl_size * sizeof (mark_t) * 2);
-                        mark_tbl_size *= 2;
+                        mark_t *real_mem_ptr = (mark_t *) realloc (*mark_tbl, mark_tbl_size * sizeof (mark_t) * 2);
+                        if (real_mem_ptr) {
+
+                            *mark_tbl = real_mem_ptr;
+                            mark_tbl_size *= 2;
+
+                        } else {
+
+                            printf ("\nASSEMBLING FAULT: MEMORY ERROR\n");
+                            signal.stop = true;
+                            signal.err = true;
+                            break;
+                        }
                     }
 
                     cmd [cmd_len - 1] = '\0';
@@ -385,11 +402,11 @@ int preassemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, mark_
 constexpr int listing_initial_offset = 15;
 constexpr int listing_arg_offset = 3;
 
-int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned char *code_buffer, mark_t *mark_tbl, int num_of_marks) {
+int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned char *code_buffer, mark_t *mark_tbl, unsigned num_of_marks) {
 
     assert (cmd_index_tbl);
     assert (code_buffer);
-    assert (num_of_marks >= 0);
+    assert (mark_tbl);
 
     char *listing_buffer = (char *) calloc (num_of_cmds * MAX_LISTING_LINE_SIZE, sizeof (char));
     if (listing_buffer == NULL) {
@@ -409,7 +426,7 @@ int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned
             continue;
         }
 
-        char cmd_cnst = cmd_index_tbl [cmds_assembled].cmd_cnst;
+        unsigned char cmd_cnst = cmd_index_tbl [cmds_assembled].cmd_cnst;
         char *space = cmd_index_tbl [cmds_assembled].space;
         char reg = 0, end_symb_1 = 0, end_symb_2 = 0;
         float num_fl = 0;
@@ -420,9 +437,9 @@ int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned
         switch (cmd_cnst & ONLY_CMD_TYPE_MASK) {
 
 #define CMD_PATTERN(name_cnst, token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) \
-            case name_cnst: { \           
+            case name_cnst: { \
                 \
-                sprintf (listing_ptr, "\n%.8X   %.2X ", handled_code_size + sizeof (code_info_t), cmd_cnst); \
+                sprintf (listing_ptr, "\n%.8lX   %.2X ", handled_code_size + sizeof (code_info_t), cmd_cnst); \
                 listing_ptr += listing_initial_offset; \
                 \
                 code_buffer [handled_code_size ++] = cmd_cnst; \
@@ -432,7 +449,7 @@ int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned
                     break; \
                 } \
                 \
-                int arg_bytes_listed = 0; \
+                size_t arg_bytes_listed = 0; \
                 for ( ; arg_bytes_listed < arg_byte_size; ++ arg_bytes_listed) { \
                     \
                     sprintf (listing_ptr, " %.2X", code_buffer [handled_code_size + arg_bytes_listed]); \
@@ -459,7 +476,8 @@ int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned
                 \
                 if (verify_cmd_end_format (cmds_assembled + 1, end_symb_1, end_symb_2)) { \
                     \
-                    asm_err = true; \
+                    signal.stop = true; \
+                    signal.err = true; \
                     break; \
                 } \
                 \
@@ -495,7 +513,7 @@ int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned
         }
     }
 
-    upload_listing (listing_buffer, symbs_listed);
+    upload_listing (listing_buffer, (size_t) (listing_ptr - listing_buffer));
     free (listing_buffer);
 
     return SUCCESS;

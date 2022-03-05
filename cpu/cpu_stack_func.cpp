@@ -2,28 +2,31 @@
                
 static void stack_resize_up (stack_t *stack);
 static void stack_resize_down (stack_t *stack);
-static void stack_verif_dump (stack_t *stack, int code_line_num, unsigned char dump_code);
+static void stack_verif_dump (stack_t *stack, unsigned long code_line_num, unsigned char dump_code);
 static void addr_stack_resize_up (addr_stack_t *stack);
 static void addr_stack_resize_down (addr_stack_t *stack);
-static void addr_stack_verif_dump (addr_stack_t *stack, int code_line_num, unsigned char dump_code);
+static void addr_stack_verif_dump (addr_stack_t *stack, unsigned long code_line_num, unsigned char dump_code);
 
 void stack_ctor (stack_t *stack, ssize_t min_capacity /* = 1 */) {
 
     stack->size = 0;
     stack->min_capacity = min_capacity;
     stack->capacity = min_capacity;
-    stack->data = (int *) calloc (min_capacity, sizeof (int));
+    stack->data = (int *) calloc ((size_t) min_capacity, sizeof (int));
 }
 
 void stack_dtor (stack_t *stack) {
 
-    memset (stack->data, BROKEN_BYTE, stack->capacity * sizeof (int));
-    free (stack->data);
+    if (stack->data) {
+
+        memset (stack->data, BROKEN_BYTE, ((size_t) stack->capacity) * sizeof (int));
+        free (stack->data);
+    }
 
     stack->data = (int *) OS_RESERVED_ADDRESS;
-    stack->size = SIZE_MAX;
-    stack->capacity = SIZE_MAX;
-    stack->min_capacity = SIZE_MAX;
+    stack->size = SSIZE_MAX;
+    stack->capacity = SSIZE_MAX;
+    stack->min_capacity = SSIZE_MAX;
 }
 
 void stack_push (stack_t *stack, int value) {
@@ -41,20 +44,23 @@ int stack_pop (stack_t *stack) {
     }
 
     int value = stack->data [-- stack->size];
-
     if (stack->size == stack->capacity / 4 && stack->size >= stack->min_capacity) stack_resize_down (stack);
-
     return value;
 }
 
 static void stack_resize_up (stack_t *stack) {
 
-    stack->data = (int *) realloc (stack->data, (stack->capacity = stack->capacity * 2) * sizeof (int));
+    int *real_mem_ptr = (int *) realloc (stack->data, ((size_t) (stack->capacity = stack->capacity * 2)) * sizeof (int));
+    if (real_mem_ptr == NULL) {
+
+        free (stack->data);
+    }
+    stack->data = real_mem_ptr;
 }
 
 static void stack_resize_down (stack_t *stack) {
 
-    stack->data = (int *) realloc (stack->data, (stack->capacity = stack->capacity / 2) * sizeof (int));
+    stack->data = (int *) realloc (stack->data, ((size_t) (stack->capacity = stack->capacity / 2)) * sizeof (int));
 }
 
 void stack_dump (stack_t *stack, unsigned long code_line_num) {
@@ -65,19 +71,19 @@ void stack_dump (stack_t *stack, unsigned long code_line_num) {
 
     if (stack) {
 
-        fprintf (log_file, "\n\nStack address: [%p]\n\nStack parameters:\nsize %lld\ncapacity %lld\nmin_capacity %lld\n\nData: [%p]\n",
+        fprintf (log_file, "\n\nStack address: [%p]\n\nStack parameters:\nsize %ld\ncapacity %ld\nmin_capacity %ld\n\nData: [%p]\n",
                 stack, stack -> size, stack -> capacity, stack -> min_capacity, stack -> data);
 
         ssize_t stack_cells_dumped = 0;
         for ( ; stack_cells_dumped < stack->size; stack_cells_dumped ++) {
 
-            fprintf (log_file, "\n[%lld]   %10.d", stack_cells_dumped, stack->data [stack_cells_dumped]);
+            fprintf (log_file, "\n[%ld]   %10.d", stack_cells_dumped, stack->data [stack_cells_dumped]);
         }
         fputs (" ____ SIZE EDGE", log_file);
 
         for ( ; stack_cells_dumped < stack->capacity; stack_cells_dumped ++) {
 
-            fprintf (log_file, "\n[%lld]   %10.d", stack_cells_dumped, stack->data [stack_cells_dumped]);
+            fprintf (log_file, "\n[%ld]   %10.d", stack_cells_dumped, stack->data [stack_cells_dumped]);
         }
 
     } else {
@@ -138,19 +144,19 @@ static void stack_verif_dump (stack_t *stack, unsigned long code_line_num, unsig
 
     if (stack) {
 
-        fprintf (log_file, "\n\nStack address: [%p]\n\nStack parameters:\nsize %lld\ncapacity %lld\nmin_capacity %lld\n\nData: [%p]\n",
+        fprintf (log_file, "\n\nStack address: [%p]\n\nStack parameters:\nsize %ld\ncapacity %ld\nmin_capacity %ld\n\nData: [%p]\n",
                 stack, stack -> size, stack -> capacity, stack -> min_capacity, stack -> data);
 
         ssize_t stack_cells_dumped = 0;
         for ( ; stack_cells_dumped < stack->size; stack_cells_dumped ++) {
 
-            fprintf (log_file, "\n[%lld]   %10.d", stack_cells_dumped, stack->data [stack_cells_dumped]);
+            fprintf (log_file, "\n[%ld]   %10.d", stack_cells_dumped, stack->data [stack_cells_dumped]);
         }
         fputs (" ____ SIZE EDGE", log_file);
 
         for ( ; stack_cells_dumped < stack->capacity; stack_cells_dumped ++) {
 
-            fprintf (log_file, "\n[%lld]   %10.d", stack_cells_dumped, stack->data [stack_cells_dumped]);
+            fprintf (log_file, "\n[%ld]   %10.d", stack_cells_dumped, stack->data [stack_cells_dumped]);
         }
 
     } else {
@@ -163,7 +169,7 @@ static void stack_verif_dump (stack_t *stack, unsigned long code_line_num, unsig
     fclose (log_file);
 }
 
-void stack_verify (stack_t *stack, int code_line_num) {
+void stack_verify (stack_t *stack, unsigned long code_line_num) {
 
     unsigned char verif_code = NO_FLAWS;
 
@@ -213,18 +219,21 @@ void addr_stack_ctor (addr_stack_t *stack, ssize_t min_capacity /* = 1 */) {
     stack->size = 0;
     stack->min_capacity = min_capacity;
     stack->capacity = min_capacity;
-    stack->data = (size_t *) calloc (min_capacity, sizeof (size_t));
+    stack->data = (size_t *) calloc ((unsigned long int) min_capacity, sizeof (size_t));
 }
 
 void addr_stack_dtor (addr_stack_t *stack) {
 
-    memset (stack->data, BROKEN_BYTE, stack->capacity * sizeof (size_t));
-    free (stack->data);
+    if (stack->data) {
 
+        memset (stack->data, BROKEN_BYTE, ((unsigned long int) stack->capacity) * sizeof (size_t));
+        free (stack->data);
+    }
+    
     stack->data = (size_t *) OS_RESERVED_ADDRESS;
-    stack->size = SIZE_MAX;
-    stack->capacity = SIZE_MAX;
-    stack->min_capacity = SIZE_MAX;
+    stack->size = SSIZE_MAX;
+    stack->capacity = SSIZE_MAX;
+    stack->min_capacity = SSIZE_MAX;
 }
 
 void addr_stack_push (addr_stack_t *stack, size_t value) {
@@ -242,20 +251,23 @@ size_t addr_stack_pop (addr_stack_t *stack) {
     }
 
     size_t value = stack->data [-- stack->size];
-
     if (stack->size == stack->capacity / 4 && stack->size >= stack->min_capacity) addr_stack_resize_down (stack);
-
     return value;
 }
 
 static void addr_stack_resize_up (addr_stack_t *stack) {
 
-    stack->data = (size_t *) realloc (stack->data, (stack->capacity = stack->capacity * 2) * sizeof (size_t));
+    size_t *real_mem_ptr = (size_t *) realloc (stack->data, ((size_t) (stack->capacity = stack->capacity * 2)) * sizeof (size_t));
+    if (real_mem_ptr == NULL) {
+
+        free (stack->data);
+    }
+    stack->data = real_mem_ptr;
 }
 
 static void addr_stack_resize_down (addr_stack_t *stack) {
 
-    stack->data = (size_t *) realloc (stack->data, (stack->capacity = stack->capacity / 2) * sizeof (size_t));
+    stack->data = (size_t *) realloc (stack->data, ((size_t) (stack->capacity = stack->capacity / 2)) * sizeof (size_t));
 }
 
 void addr_stack_dump (addr_stack_t *stack, unsigned long code_line_num) {
@@ -266,19 +278,19 @@ void addr_stack_dump (addr_stack_t *stack, unsigned long code_line_num) {
 
     if (stack) {
 
-        fprintf (log_file, "\n\nStack address: [%p]\n\nStack parameters:\nsize %lld\ncapacity %lld\nmin_capacity %lld\n\nData: [%p]\n",
+        fprintf (log_file, "\n\nStack address: [%p]\n\nStack parameters:\nsize %ld\ncapacity %ld\nmin_capacity %ld\n\nData: [%p]\n",
                 stack, stack -> size, stack -> capacity, stack -> min_capacity, stack -> data);
 
         ssize_t stack_cells_dumped = 0;
         for ( ; stack_cells_dumped < stack->size; stack_cells_dumped ++) {
 
-            fprintf (log_file, "\n[%lld]   %10.lld", stack_cells_dumped, stack->data [stack_cells_dumped]);
+            fprintf (log_file, "\n[%ld]   %10.lu", stack_cells_dumped, stack->data [stack_cells_dumped]);
         }
         fputs (" ____ SIZE EDGE", log_file);
 
         for ( ; stack_cells_dumped < stack->capacity; stack_cells_dumped ++) {
 
-            fprintf (log_file, "\n[%lld]   %10.lld", stack_cells_dumped, stack->data [stack_cells_dumped]);
+            fprintf (log_file, "\n[%ld]   %10.lu", stack_cells_dumped, stack->data [stack_cells_dumped]);
         }
 
     } else {
@@ -339,19 +351,19 @@ static void addr_stack_verif_dump (addr_stack_t *stack, unsigned long code_line_
 
     if (stack) {
 
-        fprintf (log_file, "\n\nStack address: [%p]\n\nStack parameters:\nsize %lld\ncapacity %lld\nmin_capacity %lld\n\nData: [%p]\n",
+        fprintf (log_file, "\n\nStack address: [%p]\n\nStack parameters:\nsize %ld\ncapacity %ld\nmin_capacity %ld\n\nData: [%p]\n",
                 stack, stack -> size, stack -> capacity, stack -> min_capacity, stack -> data);
 
         ssize_t stack_cells_dumped = 0;
         for ( ; stack_cells_dumped < stack->size; stack_cells_dumped ++) {
 
-            fprintf (log_file, "\n[%lld]   %10.lld", stack_cells_dumped, stack->data [stack_cells_dumped]);
+            fprintf (log_file, "\n[%ld]   %10.lu", stack_cells_dumped, stack->data [stack_cells_dumped]);
         }
         fputs (" ____ SIZE EDGE", log_file);
 
         for ( ; stack_cells_dumped < stack->capacity; stack_cells_dumped ++) {
 
-            fprintf (log_file, "\n[%lld]   %10.lld", stack_cells_dumped, stack->data [stack_cells_dumped]);
+            fprintf (log_file, "\n[%ld]   %10.lu", stack_cells_dumped, stack->data [stack_cells_dumped]);
         }
 
     } else {
@@ -364,7 +376,7 @@ static void addr_stack_verif_dump (addr_stack_t *stack, unsigned long code_line_
     fclose (log_file);
 }
 
-void addr_stack_verify (addr_stack_t *stack, int code_line_num) {
+void addr_stack_verify (addr_stack_t *stack, unsigned long code_line_num) {
 
     unsigned char verif_code = NO_FLAWS;
 

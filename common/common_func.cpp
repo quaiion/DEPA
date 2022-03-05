@@ -63,7 +63,7 @@ int lin_search_str (const char *str, const char * const *arr, int nelem) {
 
     for (int i = 0; i < nelem; ++i) {
 
-        if (strcmp (cmd, arr [i]) == STRINGS_EQUAL) {
+        if (strcmp (str, arr [i]) == STRINGS_EQUAL) {
 
             return i;
         }
@@ -83,4 +83,37 @@ char *search_digit (char *str) {
     }
 
     return NULL;
+}
+
+int verify_cmd_num () {
+
+    if (NUM_OF_CMD_TYPES > MAX_NUM_OF_CMD_TYPES) {
+
+        printf ("\nMAX COMMANDS AMOUNT EXCEEDED; EMULATION TERMINATED\n");
+        return ERROR;
+    }
+
+    return SUCCESS;
+}
+
+int verify_videomem () {
+
+    if (VIDEOSEG_START + VIDEOSEG_SIZE > RAM_SIZE) {
+
+        printf ("\nVIDEO SEGMENT DOESN NOT FIT IN THE MEM; EMULATION TERMINATED\n");
+        return ERROR;
+    }
+
+    return SUCCESS;
+}
+
+int verify_reg_num (int reg) {
+
+    if (reg < 0 || reg >= NUM_OF_REGS) {
+
+        printf ("\nREGISTER FAULT; EMULATION TERMINATED\n");
+        return ERROR;
+    }
+
+    return SUCCESS;
 }

@@ -2,7 +2,8 @@
 
 static int verify_in_num (float num);
 static int verify_segmentation (int addr);
-static int verify_reg_num (int reg);
+static int verify_stack_mem (stack_t *stack_p);
+static int verify_addr_stack_mem (addr_stack_t *stack_p);
 
 void cpu_ctor (cpu_t *cpu) {
 
@@ -53,13 +54,15 @@ void cpu_dtor (cpu_t *cpu) {
     addr_stack_dtor (&(cpu->addr_stack));
 }
 
-void verify_cpu_launch_parameters (int argc) {
+int verify_cpu_launch_parameters (int argc) {
 
     if (argc != 2) {
 
         printf ("\nWrong input, please insert codefile name only\n");
-        exit (EXIT_FAILURE);
+        return ERROR;
     }
+
+    return SUCCESS;
 }
 
 int verify_cpu_code_signature (unsigned char *code_buffer) {
@@ -109,11 +112,22 @@ static int verify_segmentation (int addr) {
     return SUCCESS;
 }
 
-static int verify_reg_num (int reg) {
+static int verify_stack_mem (stack_t *stack_p) {
 
-    if (reg < 0 || reg >= NUM_OF_REGS) {
+    if (stack_p->data == NULL) {
 
-        printf ("\nREGISTER FAULT; EMULATION TERMINATED\n");
+        printf ("\nNO MEM FOR STACK; EMULATION TERMINATED\n");
+        return ERROR;
+    }
+
+    return SUCCESS;
+}
+
+static int verify_addr_stack_mem (addr_stack_t *addr_stack_p) {
+
+    if (addr_stack_p->data == NULL) {
+
+        printf ("\nNO MEM FOR STACK; EMULATION TERMINATED\n");
         return ERROR;
     }
 
@@ -168,6 +182,7 @@ int execute_code (cpu_t *cpu) {
                     break; \
                 } \
                 \
+                size_t arg_size = arg_byte_size; \
                 execution_alg \
                 if (signal.stop) { \
                     \
