@@ -37,7 +37,7 @@ FILE *open_prog_file (int argc, char *argv []) {
 
     assert (argv);
 
-    return (argc == 2) ? (fopen ("QO_prog_file.asm", "w")) : (fopen (argv [2], "w"));
+    return (argc == 2) ? (fopen ("diprog/QO_prog_file.asm", "w")) : (fopen (argv [2], "w"));
 }
 
 unsigned char *store_code (FILE *code_file, size_t *code_buffer_size) {
@@ -85,8 +85,8 @@ int disassemble_code (unsigned char* code_buffer, size_t code_buffer_size, char 
 
         switch (code_buffer [bytes_handled] & ONLY_CMD_TYPE_MASK) {
 
-#define CMD_PATTERN(name_cnst, token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) \
-            case name_cnst: { \
+#define CMD_PATTERN(token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) \
+            case token: { \
                 \
                 int resize_res = resize_prog_buffer (&prog_buffer, (size_t) (prog_ptr - prog_buffer) + \
                                                   sizeof (#token) + max_disasm_arg_len + 2 * sizeof (char), &prog_buffer_cap); \

@@ -24,16 +24,16 @@ constexpr int MAX_CMD_LINE_LISTED = 16;
 constexpr int MAX_CMD_NAME_BYTE_SIZE = 8;
 constexpr int MIN_CMD_NAME_BYTE_SIZE = 2;
 
-constexpr int VIDEOSEG_START = 0xb800;
-constexpr int CONSOLE_SIZE_VERT = 36;
+constexpr int VIDEOSEG_START = 0x800;
+constexpr int CONSOLE_SIZE_VERT = 35;
 constexpr int CONSOLE_SIZE_HOR = 162;
-constexpr int VIDEOSEG_SIZE = CONSOLE_SIZE_HOR * CONSOLE_SIZE_VERT /* = 5832 bytes in total */;
+constexpr int VIDEOSEG_SIZE = CONSOLE_SIZE_HOR * CONSOLE_SIZE_VERT /* = 5670 pixels in total */;
 
 /* These constants should NOT be changed */
-constexpr int MAX_MARK_NAME_BYTE_SIZE = MAX_CMD_NAME_BYTE_SIZE - sizeof (char);
-constexpr int MIN_MARK_NAME_BYTE_SIZE = MIN_CMD_NAME_BYTE_SIZE - sizeof (char);
+constexpr int MAX_LABEL_NAME_BYTE_SIZE = MAX_CMD_NAME_BYTE_SIZE - sizeof (char);
+constexpr int MIN_LABEL_NAME_BYTE_SIZE = MIN_CMD_NAME_BYTE_SIZE - sizeof (char);
 
-constexpr unsigned char NOT_A_CMD = 31;
+constexpr unsigned char NOT_A_CMD = 0x1f;
 constexpr int UNKNOWN_MARK = -1;
 
 constexpr int MAX_NUM_OF_CMD_TYPES = 31;
@@ -56,7 +56,7 @@ constexpr unsigned char RAM_BIT_MASK = 32;
 constexpr unsigned char ONLY_CMD_TYPE_MASK = 31;
 
 enum CMD_NAME_CNSTS {
-#define CMD_PATTERN(name_cnst, token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) name_cnst , 
+#define CMD_PATTERN(token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) token , 
 #include "../common/commands.hpp"
 #undef CMD_PATTERN
 NUM_OF_CMD_TYPES
@@ -75,11 +75,3 @@ int verify_videomem ();
 int verify_reg_num (int reg);
 
 #endif
-
-/*
-
-check пару исключений - отсутствие файла
-с отрицательными числами точно есть какие-то траблы (см. листинг)
-нули в дампе
-
-*/

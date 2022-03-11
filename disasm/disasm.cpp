@@ -12,6 +12,18 @@ int main (int argc, char *argv []) {
     int no_err = SUCCESS;
 
     FILE *code_file = fopen (argv [1], "rb");
+    if (code_file == NULL) {
+
+        printf ("\nNo .bin file in directory or no directory with such name, please try again\n");
+        return 0;
+    }
+    FILE *prog_file = open_prog_file (argc, argv);
+    if (prog_file == NULL) {
+
+        printf ("\nNo directory with such name, please try again\n");
+        no_err = ERROR;
+    }
+
     size_t code_buffer_size = 0;
     unsigned char *code_buffer = store_code (code_file, &code_buffer_size);
     fclose (code_file);
@@ -29,7 +41,6 @@ int main (int argc, char *argv []) {
 
     if (no_err == SUCCESS) {
         
-        FILE *prog_file = open_prog_file (argc, argv);
         upload_prog (prog_buffer, prog_file, disassembled_cmds_size);
         fclose (prog_file);
         printf ("\nDISASSEMBLING FINISHED SUCCESSFULLY\n");

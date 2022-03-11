@@ -4,7 +4,7 @@ static int verify_reg_name (unsigned long line, char reg);
 static int verify_cmd_end_format (unsigned long line, char end_symb_1, char end_symb_2);
 static int verify_cmd_name (unsigned long line, cmd_idx_t *cmd);
 static int verify_cmd_space_format (unsigned long line, cmd_idx_t *cmd);
-static int verify_jump_format (unsigned long line, cmd_idx_t *cmd);
+static int verify_jump_format (unsigned long line, char *space);
 static int verify_unknown_mark (unsigned long line, int mark_num);
 static int verify_arg_num (unsigned long line, float num);
 static int verify_cmd_arg_format (unsigned long line, int format);
@@ -26,7 +26,7 @@ FILE *open_code_file (int argc, char *argv []) {
 
     assert (argv);
 
-    return (argc == 2) ? (fopen ("QO_code_file.bin", "wb")) : (fopen (argv [2], "wb"));
+    return (argc == 2) ? (fopen ("bin/QO_code_file.bin", "wb")) : (fopen (argv [2], "wb"));
 }
 
 char *store_cmds (FILE *prog_file) {
@@ -80,13 +80,31 @@ cmd_idx_t *index_cmds (char *cmd_buffer, unsigned long num_of_cmds) {
         return NULL;
     }
 
+    bool cr = false;
     cmd_index_tbl [0].line = cmd_buffer;
-    cmd_buffer = strchr (cmd_buffer, '\n');
+    char *new_line = strchr (cmd_buffer, '\n');
+    if (new_line != cmd_buffer && *(new_line - 1) == '\r') {
+
+        cr = true;
+    }
+    cmd_buffer = new_line;
     for (unsigned long i = 1; i < num_of_cmds; ++ i) {
 
-        *cmd_buffer = '\0';
+        if (cr) {
+
+            *(cmd_buffer - 1) = '\0';
+
+        } else {
+
+            *cmd_buffer = '\0';
+        }
+        cr = true;
         cmd_index_tbl [i].line = cmd_buffer + sizeof (char);
         cmd_buffer = strchr (cmd_buffer + sizeof (char), '\n');
+        if (cmd_buffer && *(cmd_buffer - 1) != '\r') {
+
+            cr = false;
+        }
     }
 
     if (cmd_buffer != NULL) {
@@ -97,6 +115,7 @@ cmd_idx_t *index_cmds (char *cmd_buffer, unsigned long num_of_cmds) {
     for (unsigned long i = 0; i < num_of_cmds; ++ i) {
 
         cmd_index_tbl [i].space = strchr (cmd_index_tbl [i].line, ' ');
+        cmd_index_tbl [i].cmd_cnst = NOT_A_CMD;
     }
 
     return cmd_index_tbl;
@@ -182,32 +201,32 @@ static int verify_cmd_space_format (unsigned long line, cmd_idx_t *cmd) {
     return SUCCESS;
 }
 
-static int verify_jump_format (unsigned long line, cmd_idx_t *cmd) {
+static int verify_jump_format (unsigned long line, char *space) {
 
-    if (cmd->space == NULL) {
-
-        printf ("\nline %lu: ASSEMBLING FAULT: WRONG FORMAT\n", line);
-        return ERROR;
-    }
-
-    if (*(cmd->space + sizeof (char)) == '/') {
+    if (space == NULL) {
 
         printf ("\nline %lu: ASSEMBLING FAULT: WRONG FORMAT\n", line);
         return ERROR;
     }
 
-    char *next_space = strchr (cmd->space + sizeof (char), ' ');
-    char *line_end = strchr (cmd->space + sizeof (char), '\0');
+    if (*(space + sizeof (char)) == '/') {
+
+        printf ("\nline %lu: ASSEMBLING FAULT: WRONG FORMAT\n", line);
+        return ERROR;
+    }
+
+    char *next_space = strchr (space + sizeof (char), ' ');
+    char *line_end = strchr (space + sizeof (char), '\0');
 
     if (next_space == NULL) {
 
-        if (line_end - (cmd->space + sizeof (char)) < MIN_MARK_NAME_BYTE_SIZE) {
+        if (line_end - (space + sizeof (char)) < MIN_LABEL_NAME_BYTE_SIZE) {
 
             printf ("\nline %lu: ASSEMBLING FAULT: IMPOSSIBLE MARK NAME (TOO SHORT NAME)\n", line);
             return ERROR;
         }
 
-        if (line_end - (cmd->space + sizeof (char)) > MAX_MARK_NAME_BYTE_SIZE) {
+        if (line_end - (space + sizeof (char)) > MAX_LABEL_NAME_BYTE_SIZE) {
 
             printf ("\nline %lu: ASSEMBLING FAULT: IMPOSSIBLE MARK NAME (ALLOWED NAME LENGTH EXCEEDED)\n", line);
             return ERROR;
@@ -215,13 +234,13 @@ static int verify_jump_format (unsigned long line, cmd_idx_t *cmd) {
 
     } else {
 
-        if (next_space - (cmd->space + sizeof (char)) < MIN_MARK_NAME_BYTE_SIZE) {
+        if (next_space - (space + sizeof (char)) < MIN_LABEL_NAME_BYTE_SIZE) {
 
             printf ("\nline %lu: ASSEMBLING FAULT: IMPOSSIBLE MARK NAME (TOO SHORT NAME)\n", line);
             return ERROR;
         }
 
-        if (next_space - (cmd->space + sizeof (char)) > MAX_MARK_NAME_BYTE_SIZE) {
+        if (next_space - (space + sizeof (char)) > MAX_LABEL_NAME_BYTE_SIZE) {
 
             printf ("\nline %lu: ASSEMBLING FAULT: IMPOSSIBLE MARK NAME (ALLOWED NAME LENGTH EXCEEDED)\n", line);
             return ERROR;
@@ -235,7 +254,7 @@ static int verify_unknown_mark (unsigned long line, int mark_num) {
 
     if (mark_num == UNKNOWN_MARK) {
 
-        printf ("\nline %lu: ASSEMBLING FAULT: UNKNOWN MARK\n", line);
+        printf ("\nline %lu: ASSEMBLING FAULT: UNKNOWN LABEL\n", line);
         return ERROR;
     }
 
@@ -280,7 +299,8 @@ int preassemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, mark_
 
     unsigned marks_handled = 0;
     size_t handled_code_size = 0;
-    for (unsigned long cmds_handled = 0; cmds_handled < num_of_cmds; ++cmds_handled) {
+    stop_signal_t signal = {};
+    for (unsigned long cmds_handled = 0; cmds_handled < num_of_cmds; ++ cmds_handled) {
 
         char *line = cmd_index_tbl [cmds_handled].line;
         char *space = cmd_index_tbl [cmds_handled].space;
@@ -290,7 +310,6 @@ int preassemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, mark_
 
         if (line [0] == '/') {
 
-            cmd_index_tbl [cmds_handled].cmd_cnst = NOT_A_CMD;
             continue;
         }
         if (verify_cmd_space_format (cmds_handled + 1, cmd_index_tbl + cmds_handled)) {
@@ -303,12 +322,42 @@ int preassemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, mark_
         }
 
         sscanf (line, "%s", cmd);
+        size_t cmd_len = strlen (cmd);
+        if (cmd [cmd_len - 1] == ':') {
+
+            if (verify_cmd_end_format (cmds_handled + 1, line [cmd_len], line [cmd_len + 1])) {
+
+                return ERROR;
+            }
+
+            if (marks_handled == mark_tbl_size) {
+
+                mark_t *real_mem_ptr = (mark_t *) realloc (*mark_tbl, mark_tbl_size * sizeof (mark_t) * 2);
+                if (real_mem_ptr) {
+
+                    *mark_tbl = real_mem_ptr;
+                    mark_tbl_size *= 2;
+
+                } else {
+
+                    printf ("\nASSEMBLING FAULT: MEMORY ERROR\n");
+                    return ERROR;
+                }
+            }
+
+            cmd [cmd_len - 1] = '\0';
+            strcpy (((*mark_tbl) [marks_handled]).name, cmd);
+            ((*mark_tbl) [marks_handled]).idx = handled_code_size;
+            marks_handled += 1;
+
+            continue;
+        }
 
         do {
-#define CMD_PATTERN(name_cnst, token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) \
+#define CMD_PATTERN(token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) \
             if (strcmp (cmd, #token) == STRINGS_EQUAL) { \
                 \
-                cmd_index_tbl [cmds_handled].cmd_cnst = name_cnst; \
+                cmd_index_tbl [cmds_handled].cmd_cnst = token; \
                 break; \
             }
 
@@ -317,14 +366,14 @@ int preassemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, mark_
 
         } while (0);
 
-        stop_signal_t signal = {};
+        unsigned char bit_code = cmd_index_tbl [cmds_handled].cmd_cnst;
+        switch (bit_code) {
 
-        switch (cmd_index_tbl [cmds_handled].cmd_cnst) {
-
-#define CMD_PATTERN(name_cnst, token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) \
-            case name_cnst: { \
+#define CMD_PATTERN(token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) \
+            case token: { \
                 \
                 preasm_format_alg \
+                cmd_index_tbl [cmds_handled].cmd_cnst = bit_code; \
                 if (signal.stop) { \
                     \
                     break; \
@@ -340,44 +389,9 @@ int preassemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, mark_
 
             default: {
 
-                size_t cmd_len = strlen (cmd);
-
-                if (cmd [cmd_len - 1] == ':') {
-
-                    if (verify_cmd_end_format (cmds_handled + 1, line [cmd_len], line [cmd_len + 1])) {
-
-                        return ERROR;
-                    }
-
-                    if (marks_handled == mark_tbl_size) {
-
-                        mark_t *real_mem_ptr = (mark_t *) realloc (*mark_tbl, mark_tbl_size * sizeof (mark_t) * 2);
-                        if (real_mem_ptr) {
-
-                            *mark_tbl = real_mem_ptr;
-                            mark_tbl_size *= 2;
-
-                        } else {
-
-                            printf ("\nASSEMBLING FAULT: MEMORY ERROR\n");
-                            signal.stop = true;
-                            signal.err = true;
-                            break;
-                        }
-                    }
-
-                    cmd [cmd_len - 1] = '\0';
-                    strcpy (((*mark_tbl) [marks_handled]).name, cmd);
-                    ((*mark_tbl) [marks_handled]).idx = handled_code_size;
-                    marks_handled += 1;
-
-                    break;
-
-                } else {
-
-                    printf ("\nline %lu: ASSEMBLING FAULT: UNKNOWN COMMAND\n", cmds_handled + 1);
-                    return ERROR;
-                }
+                printf ("\nline %lu: ASSEMBLING FAULT: UNKNOWN COMMAND\n", cmds_handled + 1);
+                signal.stop = true;
+                signal.err = true;
             }
         }
 
@@ -402,22 +416,23 @@ int preassemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, mark_
 constexpr int listing_initial_offset = 15;
 constexpr int listing_arg_offset = 3;
 
-int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned char *code_buffer, mark_t *mark_tbl, unsigned num_of_marks) {
+int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned char *code_buffer, mark_t *label_tbl, unsigned num_of_labels) {
 
     assert (cmd_index_tbl);
     assert (code_buffer);
-    assert (mark_tbl);
+    assert (label_tbl);
 
     char *listing_buffer = (char *) calloc (num_of_cmds * MAX_LISTING_LINE_SIZE, sizeof (char));
     if (listing_buffer == NULL) {
 
         printf ("\nASSEMBLING FAULT: MEMORY ERROR\n");
-        exit (EXIT_FAILURE);
+        return ERROR;
     }
     char *listing_ptr = listing_buffer;
 
+    stop_signal_t signal = {};
     size_t handled_code_size = 0;
-    for (unsigned long cmds_assembled = 0; cmds_assembled < num_of_cmds; cmds_assembled ++) {
+    for (unsigned long cmds_assembled = 0; cmds_assembled < num_of_cmds; ++ cmds_assembled) {
 
         assert (cmd_index_tbl [cmds_assembled].line);
 
@@ -426,23 +441,21 @@ int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned
             continue;
         }
 
-        unsigned char cmd_cnst = cmd_index_tbl [cmds_assembled].cmd_cnst;
+        unsigned char bit_code = cmd_index_tbl [cmds_assembled].cmd_cnst;
         char *space = cmd_index_tbl [cmds_assembled].space;
-        char reg = 0, end_symb_1 = 0, end_symb_2 = 0;
-        float num_fl = 0;
-        int arg = 0;
-        int format = 0;
-        stop_signal_t signal = {};
+        char end_symb_1 = 0, end_symb_2 = 0;
 
-        switch (cmd_cnst & ONLY_CMD_TYPE_MASK) {
+        switch (bit_code & ONLY_CMD_TYPE_MASK) {
 
-#define CMD_PATTERN(name_cnst, token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) \
-            case name_cnst: { \
+#define CMD_PATTERN(token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) \
+            case token: { \
                 \
-                sprintf (listing_ptr, "\n%.8lX   %.2X ", handled_code_size + sizeof (code_info_t), cmd_cnst); \
+                sprintf (listing_ptr, "\n%.8lX   %.2X ", handled_code_size, bit_code); \
                 listing_ptr += listing_initial_offset; \
                 \
-                code_buffer [handled_code_size ++] = cmd_cnst; \
+                code_buffer [handled_code_size ++] = bit_code; \
+                unsigned char *arg_start = code_buffer + handled_code_size; \
+                unsigned long line_num = cmds_assembled + 1; \
                 arg_assem_alg \
                 if (signal.stop) { \
                     \
@@ -461,7 +474,7 @@ int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned
                     listing_ptr += listing_arg_offset; \
                 } \
                 \
-                if (extern_arg) { \
+                if (extern_arg == false) { \
                     \
                     if (space == NULL) { \
                         \
@@ -482,7 +495,7 @@ int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned
                 } \
                 \
                 sprintf (listing_ptr, "   %s", cmd_index_tbl [cmds_assembled].line); \
-                listing_ptr += strlen (cmd_index_tbl [cmds_assembled].line); \
+                listing_ptr += 3 + strlen (cmd_index_tbl [cmds_assembled].line); \
                 \
                 handled_code_size += arg_byte_size; \
                 break; \
@@ -494,34 +507,35 @@ int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned
             default: {
 
                 printf ("\nline %lu: ASSEMBLING FAULT: PROCESS INTERRUPTED\n", cmds_assembled + 1);
-                free (listing_buffer);
-                return ERROR;
+                signal.stop = true;
+                signal.err = true;
+
+                break;
             }
         }
 
         if (signal.stop) {
 
-            if (signal.err) {
-
-                free (listing_buffer);
-                return ERROR;
-
-            } else {
-
-                break;
-            }
+            break;
         }
     }
 
     upload_listing (listing_buffer, (size_t) (listing_ptr - listing_buffer));
     free (listing_buffer);
 
-    return SUCCESS;
+    if (signal.stop && signal.err) {
+
+        return ERROR;
+
+    } else {
+
+        return SUCCESS;
+    }
 }
 
 static void upload_listing (char *listing_buffer, size_t listing_size) {
 
-    FILE *listing_file = fopen ("assembling_report.lst", "w");
+    FILE *listing_file = fopen ("log/assembling_report.lst", "w");
     fwrite (listing_buffer, sizeof (char), listing_size, listing_file);
     fclose (listing_file);
 }

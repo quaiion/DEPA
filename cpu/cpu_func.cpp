@@ -65,9 +65,11 @@ int verify_cpu_launch_parameters (int argc) {
     return SUCCESS;
 }
 
-int verify_cpu_code_signature (unsigned char *code_buffer) {
+int verify_cpu_code_signature (cpu_t *cpu) {
 
-    assert (code_buffer);
+    assert (cpu);
+
+    unsigned char *code_buffer = cpu->code - sizeof (code_info_t);
 
     if ((*((code_info_t *) code_buffer)).sig != 'QO') {
 
@@ -159,11 +161,6 @@ int execute_code (cpu_t *cpu) {
 
     assert (cpu);
 
-    if (verify_cpu_code_signature (cpu->code - sizeof (code_info_t))) {
-
-        return ERROR;
-    }
-
     stack_t *stack_p = &(cpu->stack);
     addr_stack_t *addr_stack_p = &(cpu->addr_stack);
     for (cpu->ip = 0; cpu->ip < cpu->code_size; cpu->ip += sizeof (unsigned char)) {
@@ -172,8 +169,8 @@ int execute_code (cpu_t *cpu) {
 
         switch (cpu->code [cpu->ip] & ONLY_CMD_TYPE_MASK) {
 
-#define CMD_PATTERN(name_cnst, token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) \
-            case (name_cnst): { \
+#define CMD_PATTERN(token, arg_extraction_alg, arg_byte_size, execution_alg, preasm_format_alg, extern_arg, arg_assem_alg, arg_disas_print, max_disasm_arg_len) \
+            case (token): { \
                 \
                 unsigned char *code_ptr = cpu->code + cpu->ip; \
                 arg_extraction_alg \
@@ -222,7 +219,7 @@ int execute_code (cpu_t *cpu) {
 
 void reg_dump (cpu_t *cpu, unsigned long line) {
 
-    FILE *log_file = fopen ("cpu.log", "a");
+    FILE *log_file = fopen ("log/cpu.log", "a");
 
     fprintf (log_file, "Register dump called by DUMP command (code line %lu)\n\nRegisters address: [%p]\n\nValues stored:  ", line, &(cpu->reg));
 

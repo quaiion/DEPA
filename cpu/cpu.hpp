@@ -22,7 +22,7 @@ void cpu_ctor (cpu_t *cpu);
 void cpu_dtor (cpu_t *cpu);
 
 int verify_cpu_launch_parameters (int argc);
-int verify_cpu_code_signature (unsigned char *code_buffer);
+int verify_cpu_code_signature (cpu_t *cpu);
 
 void load_code (FILE *code_file, cpu_t *cpu);
 int execute_code (cpu_t *cpu);

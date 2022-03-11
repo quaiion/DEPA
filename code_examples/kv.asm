@@ -33,10 +33,10 @@ sub
 push 2
 push ax
 mul
-div
+divi
 out
 mul
-div
+divi
 out
 none:
 hlt
@@ -48,7 +48,7 @@ sub
 push 2
 push ax
 mul
-div
+divi
 out
 hlt
 /
@@ -57,7 +57,7 @@ sqrt:
 pop cx
 push cx
 push 2
-div
+divi
 pop [0]
 push 0
 push 16
@@ -68,7 +68,7 @@ push 0.5
 push [0]
 push cx
 push [0]
-div
+divi
 add
 mul
 pop [0]

@@ -6,9 +6,9 @@ push 1
 je one
 pop
 call fibb
-pop
-pop
 one:
+pop
+pop
 out
 hlt
 /

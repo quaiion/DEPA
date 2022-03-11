@@ -9,14 +9,23 @@ int main (int argc, char *argv []) {
         return 0;
     }
 
+    FILE *code_file = fopen (argv [1], "rb");
+    if (code_file == NULL) {
+
+        printf ("\nNo such file in directory, please try again\n");
+        return 0;
+    }
+
     cpu_t cpu = {};
     cpu_ctor (&cpu);
-
-    FILE *code_file = fopen (argv [1], "rb");
+    
     load_code (code_file, &cpu);
     fclose (code_file);
 
-    execute_code (&cpu);
+    if (verify_cpu_code_signature (&cpu) == SUCCESS) {
+
+        execute_code (&cpu);
+    }
 
     cpu_dtor (&cpu);
     return 0;

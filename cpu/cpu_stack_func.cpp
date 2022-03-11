@@ -65,7 +65,7 @@ static void stack_resize_down (stack_t *stack) {
 
 void stack_dump (stack_t *stack, unsigned long code_line_num) {
 
-    FILE *log_file = fopen ("cpu.log", "a");
+    FILE *log_file = fopen ("log/cpu.log", "a");
 
     fprintf (log_file, "Stack dump called by DUMP command (code line %lu)", code_line_num);
 
@@ -98,7 +98,7 @@ void stack_dump (stack_t *stack, unsigned long code_line_num) {
 
 static void stack_verif_dump (stack_t *stack, unsigned long code_line_num, unsigned char dump_code) {
 
-    FILE *log_file = fopen ("cpu.log", "a");
+    FILE *log_file = fopen ("log/cpu.log", "a");
 
     fprintf (log_file, "Stack dump automatically called by VERIFY command (code line %lu)\n\nVerification codes returned:", code_line_num);
     
@@ -272,7 +272,7 @@ static void addr_stack_resize_down (addr_stack_t *stack) {
 
 void addr_stack_dump (addr_stack_t *stack, unsigned long code_line_num) {
 
-    FILE *log_file = fopen ("cpu.log", "a");
+    FILE *log_file = fopen ("log/cpu.log", "a");
 
     fprintf (log_file, "ADDRESS Stack dump called by DUMP command (code line %lu)", code_line_num);
 
@@ -305,7 +305,7 @@ void addr_stack_dump (addr_stack_t *stack, unsigned long code_line_num) {
 
 static void addr_stack_verif_dump (addr_stack_t *stack, unsigned long code_line_num, unsigned char dump_code) {
 
-    FILE *log_file = fopen ("cpu.log", "a");
+    FILE *log_file = fopen ("log/cpu.log", "a");
 
     fprintf (log_file, "ADDRESS Stack dump automatically called by VERIFY command (code line %lu)\n\nVerification codes returned:", code_line_num);
     

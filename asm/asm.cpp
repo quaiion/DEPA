@@ -12,6 +12,17 @@ int main (int argc, char *argv []) {
     int no_err = SUCCESS;
 
     FILE *prog_file = fopen (argv [1], "r");
+    if (prog_file == NULL) {
+
+        printf ("\nNo .bin file in directory or no directory with such name, please try again\n");
+        return 0;
+    }
+    FILE *code_file = open_code_file (argc, argv);
+    if (code_file == NULL) {
+
+        printf ("\nNo directory with such name, please try again\n");
+    }
+
     char *cmd_buffer = store_cmds (prog_file);
     if (cmd_buffer == NULL) {
 
@@ -32,10 +43,9 @@ int main (int argc, char *argv []) {
     no_err += preassemble_prog (cmd_index_tbl, num_of_cmds, &mark_tbl, &num_of_marks, &code_size);
 
     unsigned char *code_buffer = NULL;
-    size_t assembled_code_size = 0;
     if (no_err == SUCCESS) {
 
-        code_buffer = (unsigned char *) malloc (code_size * sizeof (unsigned char));
+        code_buffer = (unsigned char *) malloc (code_size * sizeof (unsigned char) + sizeof (code_info_t));
         if (code_buffer == NULL) {
 
             printf ("\nASSEMBLING FAULT: MEMORY ERROR\n");
@@ -49,8 +59,7 @@ int main (int argc, char *argv []) {
 
     if (no_err == SUCCESS) {
 
-        FILE *code_file = open_code_file (argc, argv);
-        upload_code (code_buffer, code_file, assembled_code_size);
+        upload_code (code_buffer, code_file, code_size);
         fclose (code_file);
 
         printf ("\nASSEMBLING FINISHED SUCCESSFULLY\n");

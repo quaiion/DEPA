@@ -8,7 +8,7 @@ constexpr unsigned DEFAULT_MARK_TABLE_ELEM_SIZE = 8;
 
 struct mark_t {
 
-    char name [MAX_MARK_NAME_BYTE_SIZE + sizeof (char)];
+    char name [MAX_LABEL_NAME_BYTE_SIZE + sizeof (char)];
     size_t idx;
 };
 
@@ -20,7 +20,7 @@ struct cmd_idx_t {
 };
 
 FILE *open_code_file (int argc, char *argv []);
-int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned char *code_buffer, mark_t *mark_tbl, unsigned num_of_marks);
+int assemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, unsigned char *code_buffer, mark_t *label_tbl, unsigned num_of_labels);
 int preassemble_prog (cmd_idx_t *cmd_index_tbl, unsigned long num_of_cmds, mark_t **mark_tbl, unsigned *num_of_marks, size_t *code_size);
 void set_code_info (unsigned char **code_buffer);
 char *store_cmds (FILE *prog_file);
