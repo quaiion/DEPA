@@ -20,10 +20,10 @@ To launch every program, you should just run the executable file with 1 paramete
 ### *.asm* programs
 There are several simple syntax rules you should follow while writing down your *.asm* program:
 1. Every command should be written on a separate line.
-2. No empty lines allowed. To live a space line write a comment symbol "/" at the beginning of the empty line.
+2. No empty lines allowed. To leave a space line write a comment symbol "/" at the beginning of the empty line.
 3. Arguments of each command (if there are any) should be separated from the command itself by **one** space symbol.
-4. Every label should be written on a separate line as well (when not used as an argument). Max label's name size can be adjusted at the beginning of *common/common.hpp* header file. IF the label's name is not used as an argument, the ":" should follow after its name.
-5. To comment out lines, use the comment symbol "/" at the beginning of the line. To write a simple comment, type this symbol after the code line, separated by 1 space symbol from it, and enter the comment of any size and format possible.
+4. Every label should be written on a separate line as well (when not used as an argument). Max label's name size can be adjusted at the beginning of *common/common.hpp* header file. If the label's name is not used as an argument, the ":" symbol should follow after its name.
+5. To comment out lines, use the comment symbol "/" at the beginning of the line. To write a simple comment, type this symbol after the code line, separated by **one** space symbol from it, and enter the comment of any size and format possible.
 6. You don't have to use **HLT** command, if the execution finish matches the real program's finish - execution will be stopped automatically.
 
 The basic included commands list and the accurate instruction of how to edit it and create your own commands can be found in *COMMANDS.md* file. Some code examples can be found in *code_exaples* folder (*fibb.asm* - prints the specified Fibbonacci number, *kv.asm* - calculates the roots of a square polynom, based on polynom's coefficients entered, *circle.asm* - prints a 7x7 circle with center coordinates inserted in the 35x162 console, using the video segment of emulated memory), *.bin* relative files and disassembled files are stored in *bin* and *prog* folders respectively.
