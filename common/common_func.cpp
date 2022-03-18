@@ -59,19 +59,6 @@ float convert_int_1000_to_float (int num_int) {
     return (float) num_int / 1000;
 }
 
-int lin_search_str (const char *str, const char * const *arr, int nelem) {
-
-    for (int i = 0; i < nelem; ++i) {
-
-        if (strcmp (str, arr [i]) == STRINGS_EQUAL) {
-
-            return i;
-        }
-    }
-
-    return -1;
-}
-
 char *search_digit (char *str) {
 
     for (int i = 0; str [i] != '\0'; ++ i) {

@@ -68,7 +68,6 @@ int get_num_of_digits_sizet (size_t number);
 int int_abs (int num);
 int convert_float_to_int_1000 (float num_fl);
 float convert_int_1000_to_float (int num_int);
-int lin_search_str (const char *str, const char * const *arr, int nelem);
 char *search_digit (char *str);
 int verify_cmd_num ();
 int verify_videomem ();

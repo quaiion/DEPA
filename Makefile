@@ -21,7 +21,7 @@ GCC_DB_FLAGS = -D _DEBUG -ggdb3 -std=c++2a -O0 -Wall -Wextra -Weffc++ -Waggressi
 # no-debug compilation mode flag
 GCC_GO = -w
 
-all: cpu asm disasm clean_obj
+all: cpu asm disasm
 
 cpu: cpu.o cpu_func.o cpu_stack_func.o common_func.o
 	$(COMPILER) -o run_cpu cpu.o cpu_func.o cpu_stack_func.o common_func.o
