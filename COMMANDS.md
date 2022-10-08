@@ -18,7 +18,7 @@ push \[*reg*+*val*]     | yup   | yup   | yup   | **111**00001
 
 Of course, simpler system of operation specification could be used (e.g. considering different types of one command as completely different commands). But this way of storing the binary information was many times more interesting to implement (which is a good argument for an educational project). Beyond this, such code's execution runs a bit faster and (looking forward to using this CPU emulation in other projects) binary files generated that way may be more efficient to automatically analyse/translate/modify etc.
 
-### Deleting/Inserting/Changing commands
+### Deleting/inserting/changing commands
 All of this kind of actions can be done through the *common/commands.hpp* header file. Each command is described by 9 parameters/algorithms, including:
 
   Parameter name    |  Description  |  Special info
